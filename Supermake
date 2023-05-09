@@ -1,0 +1,15 @@
+build: clean
+	@alpine:3 bash
+	go generate ./... \
+	&& echo 'yay'
+	go build -o supermake
+
+clean:
+	rm supermake || true
+	rm internal/parser/supermakegrammar_* || true
+	rm internal/parser/SuperMakeGrammar.tokens internal/parser/SuperMakeGrammarLexer.*
+	rm -r internal/parser/.antlr
+
+	freeup:
+		@alpine:3
+		echo 'testing...'

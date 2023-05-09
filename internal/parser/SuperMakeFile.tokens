@@ -1,0 +1,12 @@
+T__0=1
+T__1=2
+INDENT=3
+SPACES=4
+NEWLINE=5
+VAR=6
+EXECUTOR=7
+WORD=8
+COMMENT=9
+'='=1
+':'=2
+'\t'=3
