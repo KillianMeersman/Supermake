@@ -1,15 +1,135 @@
-build: clean
-	@alpine:3 bash
-	go generate ./... \
-	&& echo 'yay'
-	go build -o supermake
+help_attach = "attach - Attach a tty to stdin/stdout of a running container for debug sessions. Stop detachment with Ctrl+p Ctrl+q"
+help_build = "build - Build the production justrussel api service docker image"
+help_console = "console - Start a console running bash"
+help_deploy = "deploy - Deploy the service to Google Cloudrun"
+help_publish = "publish - Tag and push the docker image"
+help_server = "server - Start a development server"
+help_start = "start - Start all services in production mode"
+help_test = "test - Run all unit and integration tests"
+
+export ENVIRONMENT ?= staging
+export API_VERSION ?= local
+export API_VERSION_CLEAN = $(shell echo $(API_VERSION) | sed 's/\./-/g')
+export API_IMAGE := europe-docker.pkg.dev/just-russel/docker/backend/api:$(API_VERSION)
+export AUXILIARY_VERSION ?= $(API_VERSION)
+export NAMESPACE := $(ENVIRONMENT)
+export SERVICE_ACCOUNT := $(ENVIRONMENT)
+
+export SENTRY_ORG := just-russel
+
+STAGING_DIR := $(shell cd deploy && ./generate-yaml.sh)
+
+# This help target is first because it is the default when
+# not specifying one.
+help:
+	@echo $(help_attach)
+	@echo $(help_build)
+	@echo $(help_console)
+	@echo $(help_deploy)
+	@echo $(help_publish)
+	@echo $(help_server)
+	@echo $(help_start)
+	@echo $(help_test)
+
+build: test
+	@echo "===> $(help_build)"
+	@echo "Building image $(API_IMAGE)"
+	TARGET=production docker compose build
+
+publish: build auxiliary
+	TARGET=production docker compose push
+
+start:
+	@echo "===> $(help_start)"
+	docker compose -f docker-compose.yaml up
+
+test:
+	@echo "===> $(help_test)"
+	TARGET=dev docker compose run --build api pytest
+
+requirements:
+	pip-compile --resolver=backtracking requirements.in > requirements.txt
+
+console:
+	@echo "===> $(help_console)"
+	docker compose -f docker-compose.yaml -f docker-compose.dev.yaml run api bash
+
+attach:
+	@echo "===> $(help_attach)"
+	docker attach justrussel-api-1
 
 clean:
-	rm supermake || true
-	rm internal/parser/supermakegrammar_* || true
-	rm internal/parser/SuperMakeGrammar.tokens internal/parser/SuperMakeGrammarLexer.*
-	rm -r internal/parser/.antlr
+	docker compose -f docker-compose.yaml -f docker-compose.dev.yaml down -v
+	docker image rm -f $(API_IMAGE)
+	docker image prune -f
 
-	freeup:
-		@alpine:3
-		echo 'testing...'
+deploy: prepare migrate promote
+	@echo "===> $(help_deploy)"
+
+	# Prepare services green-blue deployment
+	# Cloud Run (KNative) services are not yet given any traffic,
+	# use the 'promote' target for that.
+	prepare: publish
+		gcloud config set run/region europe-west1
+
+		# Deploy a new revision to the service with no traffic and the 'green' tag
+		gcloud run deploy $(ENVIRONMENT)-api --revision-suffix=$(API_VERSION_CLEAN) --image=europe-docker.pkg.dev/just-russel/docker/backend/api:$(API_VERSION) --tag=green --no-traffic \
+		|| gcloud run services update-traffic $(ENVIRONMENT)-api --update-tags=green=$(ENVIRONMENT)-api-$(API_VERSION_CLEAN)
+		gcloud run deploy $(ENVIRONMENT)-worker --revision-suffix=$(API_VERSION_CLEAN) --image=europe-docker.pkg.dev/just-russel/docker/backend/api:$(API_VERSION) --tag=green --no-traffic \
+		|| gcloud run services update-traffic $(ENVIRONMENT)-worker --update-tags=green=$(ENVIRONMENT)-worker-$(API_VERSION_CLEAN)
+
+	migrate: publish deploy_k8s
+		cd $(STAGING_DIR)/k8s && ./run-command.sh 'gh-migrate-database' 'python manage.py migrate --database default'
+
+
+	promote: prepare deploy_k8s
+		gcloud config set run/region europe-west1
+
+		# Route all traffic to the Cloud Run revision with green tag and assign the blue tag to it
+		gcloud run services update-traffic $(ENVIRONMENT)-api --to-tags green=100 --set-tags=blue=$(ENVIRONMENT)-api-$(API_VERSION_CLEAN),green=$(ENVIRONMENT)-api-$(API_VERSION_CLEAN)
+		gcloud run services update-traffic $(ENVIRONMENT)-worker --to-tags green=100 --set-tags=blue=$(ENVIRONMENT)-worker-$(API_VERSION_CLEAN),green=$(ENVIRONMENT)-worker-$(API_VERSION_CLEAN)
+
+		# Use the 'replace' command to make sure the services match the specifications.
+		gcloud run services replace $(STAGING_DIR)/cloudrun/$(ENVIRONMENT)-api.yaml & \
+		gcloud run services replace $(STAGING_DIR)/cloudrun/$(ENVIRONMENT)-worker.yaml & \
+		gcloud run services replace $(STAGING_DIR)/cloudrun/$(ENVIRONMENT)-pdfconverter.yaml & \
+		wait
+
+		# Create Sentry release
+		sentry-cli releases new -p api -p worker $(API_VERSION)
+		sentry-cli releases set-commits --auto $(API_VERSION) || true
+		sentry-cli releases deploys $(API_VERSION) new --env $(ENVIRONMENT)
+
+	deploy_k8s: publish
+		cd $(STAGING_DIR)/k8s \
+		&& ./download-secrets.sh $(ENVIRONMENT) \
+		&& kubectl -n $(NAMESPACE) apply -k $(ENVIRONMENT)
+
+format:
+	autoflake -v -i -r --remove-all-unused-imports justrusselbackend --exclude=justrusselbackend/apps.py
+	isort justrusselbackend
+	black justrusselbackend --line-length=88
+
+lint:
+	isort --check justrusselbackend
+	flake8 --exclude=justrusselbackend/config/whatsappmessages.py justrusselbackend
+	semgrep --use-git-ignore --config .semgrep.yaml --config p/django justrusselbackend
+
+auxiliary: gcloud coronadirect cron
+	gcloud:
+		docker buildx build --push -t "europe-docker.pkg.dev/just-russel/docker/backend/gcloud:$(API_VERSION)" deploy/dockerfiles/00-gcloud
+
+	coronadirect: gcloud
+		docker buildx build --push -t "europe-docker.pkg.dev/just-russel/docker/backend/coronadirect:$(API_VERSION)" deploy/dockerfiles/10-coronadirect
+
+	cron:
+		docker buildx build --push -t "europe-docker.pkg.dev/just-russel/docker/backend/cron:$(API_VERSION)" -f Dockerfile.cron .
+
+server:
+	@echo "===> $(help_server)"
+	docker compose -f docker-compose.yaml -f docker-compose.dev.yaml up
+
+services:
+	docker compose -f docker-compose.yaml -f docker-compose.dev.yaml up -d postgres jaeger pdfconverter
+
+.PHONY: attach build clean console format lint requirements server start test help gcloud coronadirect migrate deploy_api deploy_worker deploy_k8s deploy
