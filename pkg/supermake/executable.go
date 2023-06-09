@@ -48,6 +48,7 @@ type Target struct {
 	Node         string
 	Dependencies []string
 	Steps        []Runable
+	Variables    map[string]*Variable
 }
 
 func (t *Target) Run(ctx context.Context, workDir string) error {

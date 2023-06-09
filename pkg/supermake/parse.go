@@ -1,19 +1,21 @@
 package supermake
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"log"
 	"os"
+	"os/exec"
 	"regexp"
 	"strings"
 )
 
-var targetRegex = regexp.MustCompile("^\t*([a-zA-Z0-9-_.@]+): +(.*)$")
-var executorRegex = regexp.MustCompile("^\t*@([a-zA-Z0-9-_:.]+)( .*)?$")
-var variableDeclarationRegex = regexp.MustCompile("^(export +)?(\\w*?) *([?:]?=) *([^#\n]*)")
-var variableRegex = regexp.MustCompile("$\\((.*)\\)")
+var targetRegex = regexp.MustCompile(`^([a-zA-Z0-9-_.@]+):(?: +(.*))?$`)
+var executorRegex = regexp.MustCompile(`^\t*@([a-zA-Z0-9-_:.]+)( .*)?$`)
+var variableDeclarationRegex = regexp.MustCompile(`^(export +)?(\w+) +(=|:=|\?=) +(.*)$`)
+var variableRegex = regexp.MustCompile(`\$\((.*)\)`)
 
 const COMMENT_CHARS = "#"
 
@@ -28,12 +30,131 @@ type Variable struct {
 	Name           string
 	EvaluationType VariableEvaluationType
 	Export         bool
-	Value          string
+	value          string
+}
+
+func (v *Variable) Value() string {
+	if v.EvaluationType == FALLBACK {
+		if v, ok := os.LookupEnv(v.Name); ok {
+			return v
+		}
+	}
+	return v.value
 }
 
 type SupermakeFile struct {
-	Targets   map[string]Target
-	Variables map[string]Variable
+	Targets   map[string]*Target
+	Variables map[string]*Variable
+}
+
+type SuperMakeFileParser struct {
+	rawLines []string
+
+	lines     []string
+	indent    []int
+	sourcemap []int
+}
+
+func NewParser(lines []string) *SuperMakeFileParser {
+	return &SuperMakeFileParser{
+		rawLines: lines,
+	}
+}
+
+// Build a map of cleaned lines and their indentation levels.
+// Removes indentation characters as well as comments.
+func (p *SuperMakeFileParser) cleanAndMapLines() {
+	p.indent = make([]int, 0, len(p.rawLines))
+	p.lines = make([]string, 0, len(p.rawLines))
+	p.sourcemap = make([]int, 0)
+
+	// build indentation level map
+	for i, line := range p.rawLines {
+		line, indentation, err := countAndRemoveIndentation(line)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		line = stripTrailingComment(line)
+		line = strings.TrimSpace(line)
+
+		if len(line) < 1 {
+			continue
+		}
+
+		p.indent = append(p.indent, indentation)
+		p.lines = append(p.lines, line)
+		p.sourcemap = append(p.sourcemap, i)
+	}
+}
+
+func (p *SuperMakeFileParser) parseGlobalVariables() (map[string]*Variable, error) {
+	variables := make(map[string]*Variable)
+
+	for i, line := range p.lines {
+		if variableDeclarationRegex.MatchString(line) {
+			variable, err := parseVariable(line, variables)
+			if err != nil {
+				return nil, fmt.Errorf("error on line %d: %s", p.sourcemap[i]+1, err)
+			}
+			variables[variable.Name] = variable
+		}
+	}
+
+	return variables, nil
+}
+
+func (p *SuperMakeFileParser) parseTargets() (map[string]*Target, error) {
+	targets := make(map[string]*Target)
+
+	for i, line := range p.lines {
+		if targetRegex.MatchString(line) {
+			// If not at the last line
+			targetEnd := i
+			if i+1 <= len(p.indent) {
+				targetEnd = p.findBlockEnd(i)
+			}
+			target, err := parseTarget(p.lines[i:targetEnd+1], p.indent[i:targetEnd+1])
+			if err != nil {
+				return nil, err
+			}
+			targets[target.Name] = target
+		}
+	}
+
+	return targets, nil
+}
+
+func (p *SuperMakeFileParser) Parse() (*SupermakeFile, error) {
+	p.cleanAndMapLines()
+	globalVariables, err := p.parseGlobalVariables()
+	if err != nil {
+		return nil, err
+	}
+
+	targets, err := p.parseTargets()
+	if err != nil {
+		return nil, err
+	}
+
+	return &SupermakeFile{
+		Targets:   targets,
+		Variables: globalVariables,
+	}, nil
+}
+
+// Find the end line of an indented block.
+// Assumes the given line is expected_block_indent - 1.
+func (p *SuperMakeFileParser) findBlockEnd(index int) int {
+	minIndentation := p.indent[index] + 1
+
+	for i := index + 1; i < len(p.indent); i++ {
+		if p.indent[i] < minIndentation {
+			return i
+		}
+	}
+
+	return len(p.indent)
 }
 
 func (s *SupermakeFile) Run(target string) error {
@@ -83,52 +204,16 @@ func countAndRemoveIndentation(line string) (string, int, error) {
 func stripTrailingComment(line string) string {
 	lastIndex := strings.LastIndex(line, "#")
 	if lastIndex > -1 {
-		return line[lastIndex-1:]
+		return line[:lastIndex]
 	}
 	return line
 }
 
-// Build a map of cleaned lines and their indentation levels.
-// Removes indentation characters as well as comments.
-func cleanAndMapLines(lines []string) ([]string, []int, map[int]int) {
-	indentationLevels := make([]int, 0, len(lines))
-	filteredLines := make([]string, 0, len(lines))
-	sourceMap := make(map[int]int)
-
-	// build indentation level map
-	for i, line := range lines {
-		line, indentation, err := countAndRemoveIndentation(line)
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		if len(line) < 1 {
-			continue
-		}
-
-		indentationLevels = append(indentationLevels, indentation)
-		filteredLines = append(filteredLines, line)
-		sourceMap[len(filteredLines)-1] = i
-	}
-
-	return filteredLines, indentationLevels, sourceMap
-}
-
-// Find the end line of an indented block.
-func findBlockEnd(lines []string, indentationLevels []int, index int) int {
-	minIndentation := indentationLevels[index] + 1
-
-	for i := index; i < len(lines); i++ {
-		if indentationLevels[i] < minIndentation {
-			return i
-		}
-	}
-
-	return len(lines)
-}
-
-func parseTarget(lines []string) (*Target, error) {
+// Parse a target.
+// Assumes the target declaration is the first line.
+func parseTarget(lines []string, indentationLevels []int) (*Target, error) {
 	headerParts := strings.SplitN(lines[0], ":", 2)
+	indentationLevel := indentationLevels[0]
 
 	// Name & Node
 	nameParts := strings.SplitN(headerParts[0], "@", 2)
@@ -152,7 +237,12 @@ func parseTarget(lines []string) (*Target, error) {
 	currentCommands := make([]Executable, 0)
 	var currentExecutor Executor = new(LocalEnvironment)
 
-	for _, line := range lines[1:] {
+	for i, line := range lines[1:] {
+		// Ignore line if part of nested target
+		if indentationLevels[i+1] != indentationLevel {
+			continue
+		}
+
 		// If executor line, end the current command group.
 		if executorRegex.MatchString(line) {
 			if len(currentCommands) > 0 {
@@ -189,65 +279,104 @@ func parseTarget(lines []string) (*Target, error) {
 	}, nil
 }
 
-func evaluateVariable(variable string, variables map[string]*Variable) (string, error) {
-	evaluatedVariables := make(map[string]struct{}) // prevent loops
-
-	for {
-		v, ok := variables[variable]
-		if !ok {
-			return "", fmt.Errorf("unknown variable '%s'", variable)
-		}
-
-		if _, ok := evaluatedVariables[variable]; ok {
-			return "", errors.New("variable evaluation loop")
-		}
-		evaluatedVariables[variable] = struct{}{}
-
-		if strings.HasPrefix(variable, "$(") && strings.HasSuffix(variable, ")") {
-			variable = variable[2 : len(variable)-2]
-		} else {
-			return v.Value, nil
+func runShellScript(script string, variables map[string]*Variable) ([]byte, error) {
+	cmd := exec.Command("sh", "-c", script)
+	// Set environment variables
+	for _, v := range variables {
+		if v.Export {
+			cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", v.Name, v.Value()))
 		}
 	}
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	err := cmd.Run()
+	if err != nil {
+		return nil, fmt.Errorf("%s: '%s'", err, strings.TrimRight(stderr.String(), "\n\r"))
+	}
+
+	return stdout.Bytes(), nil
 }
 
-func parseVariable(line string) (*Variable, error) {
-	exportSubstr := "export "
-	i := 0
+func evaluateVariables(line string, variables map[string]*Variable) (string, error) {
+	substitutions := make(map[string]string)
 
-	// export?
-	export := strings.HasPrefix(line, exportSubstr)
-	if export {
-		i = len(exportSubstr)
+	for _, match := range variableRegex.FindAllStringSubmatch(line, -1) {
+		wholeMatch := match[0]
+		rawIdentifier := match[1]
+		if len(rawIdentifier) < 1 {
+			return "", errors.New("empty variable")
+		}
+
+		// Substitute nested variables
+		evaluatedIdentifier, err := evaluateVariables(rawIdentifier, variables)
+		if err != nil {
+			return "", err
+		}
+
+		if strings.HasPrefix(evaluatedIdentifier, "shell ") {
+			shellString := strings.TrimPrefix(evaluatedIdentifier, "shell ")
+			stdout, err := runShellScript(shellString, variables)
+			if err != nil {
+				return "", fmt.Errorf("variable shell command failed to execute: '%s': %s", shellString, err)
+			}
+			t := strings.TrimRight(string(stdout), "\n\r")
+			substitutions[wholeMatch] = t
+		} else {
+			if variable, ok := variables[evaluatedIdentifier]; ok {
+				substitutions[wholeMatch] = variable.Value()
+			} else if variable, ok := os.LookupEnv(evaluatedIdentifier); ok {
+				substitutions[wholeMatch] = variable
+			} else {
+				return "", fmt.Errorf("unknown variable for '%s': '%s'", line, evaluatedIdentifier)
+			}
+		}
+
 	}
 
-	// identifier
-	identifierEnd := strings.IndexRune(line[i:], ' ')
-	identifier := line[i:identifierEnd]
-	i = identifierEnd
-
-	// evaluation type
-	i = strings.IndexAny(line, ":?=")
-	if i == -1 {
-		return nil, fmt.Errorf("invalid variable declaration '%s'", line)
+	for placeholder, substitution := range substitutions {
+		line = strings.ReplaceAll(line, placeholder, substitution)
 	}
+
+	return line, nil
+}
+
+func parseVariable(line string, variables map[string]*Variable) (*Variable, error) {
+	groups := variableDeclarationRegex.FindStringSubmatch(line)
+	export := false
+
+	// Starts with export?
+	if groups[1] != "" {
+		export = true
+	}
+
+	// Identifier
+	identifier := groups[2]
+
+	// Evaluation type
 	var evaluationType VariableEvaluationType
-	switch line[i] {
-	case ':', '=':
+	switch groups[3] {
+	case "=", ":=":
 		evaluationType = RECURSIVE
-	case '?':
+	case "?=":
 		evaluationType = FALLBACK
 	default:
-		return nil, fmt.Errorf("invalid variable evaluation type '%b'", line[i])
+		return nil, fmt.Errorf("invalid variable evaluation type '%b'", line[3])
 	}
 
-	i = strings.LastIndex(line[i:], "=")
+	// Value
+	value, err := evaluateVariables(groups[4], variables)
+	if err != nil {
+		return nil, err
+	}
 
 	return &Variable{
 		Name:           identifier,
 		EvaluationType: evaluationType,
 		Export:         export,
-		Value:          strings.TrimSpace(line[i:]),
+		value:          value,
 	}, nil
 }
 
@@ -259,32 +388,7 @@ func ParseSupermakeFileV2(path string) (*SupermakeFile, error) {
 
 	data := string(dataBytes)
 	lines := strings.Split(data, "\n")
-	lines, indentationLevels, _ := cleanAndMapLines(lines)
-	targetStack := Stack[*Target]{}
 
-	variables := make(map[string]Variable)
-
-	for i, line := range lines {
-		// Enter target
-		targetEnd := i
-		if targetRegex.MatchString(line) {
-			if i+1 <= len(indentationLevels) {
-				targetEnd = findBlockEnd(lines, indentationLevels, i)
-			}
-
-			target, err := parseTarget(lines[i : targetEnd+1])
-			if err != nil {
-				return nil, err
-			}
-			targetStack.Push(target)
-		} else if variableDeclarationRegex.MatchString(line) {
-			variable, err := parseVariable(line)
-			if err != nil {
-				return nil, err
-			}
-			variables[variable.Name] = *variable
-		}
-	}
-
-	return &SupermakeFile{}, nil
+	parser := NewParser(lines)
+	return parser.Parse()
 }

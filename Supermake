@@ -1,4 +1,4 @@
-help_attach = "attach - Attach a tty to stdin/stdout of a running container for debug sessions. Stop detachment with Ctrl+p Ctrl+q"
+help_attach = "attach - Attach a tty to stdin/stdout of a running container for debug sessions. Stop detachment with Ctrl+p Ctrl+q" # testing... sss
 help_build = "build - Build the production justrussel api service docker image"
 help_console = "console - Start a console running bash"
 help_deploy = "deploy - Deploy the service to Google Cloudrun"
@@ -17,45 +17,44 @@ export SERVICE_ACCOUNT := $(ENVIRONMENT)
 
 export SENTRY_ORG := just-russel
 
-STAGING_DIR := $(shell cd deploy && ./generate-yaml.sh)
-
 # This help target is first because it is the default when
 # not specifying one.
 help:
-	@echo $(help_attach)
-	@echo $(help_build)
-	@echo $(help_console)
-	@echo $(help_deploy)
-	@echo $(help_publish)
-	@echo $(help_server)
-	@echo $(help_start)
-	@echo $(help_test)
+	@alpine:3 bash
+	echo $(help_attach)
+	echo $(help_build)
+	echo $(help_console)
+	echo $(help_deploy)
+	echo $(help_publish)
+	echo $(help_server)
+	echo $(help_start)
+	echo $(help_test)
 
 build: test
-	@echo "===> $(help_build)"
-	@echo "Building image $(API_IMAGE)"
+	echo "===> $(help_build)"
+	echo "Building image $(API_IMAGE)"
 	TARGET=production docker compose build
 
 publish: build auxiliary
 	TARGET=production docker compose push
 
 start:
-	@echo "===> $(help_start)"
+	echo "===> $(help_start)"
 	docker compose -f docker-compose.yaml up
 
 test:
-	@echo "===> $(help_test)"
+	echo "===> $(help_test)"
 	TARGET=dev docker compose run --build api pytest
 
 requirements:
 	pip-compile --resolver=backtracking requirements.in > requirements.txt
 
 console:
-	@echo "===> $(help_console)"
+	echo "===> $(help_console)"
 	docker compose -f docker-compose.yaml -f docker-compose.dev.yaml run api bash
 
 attach:
-	@echo "===> $(help_attach)"
+	echo "===> $(help_attach)"
 	docker attach justrussel-api-1
 
 clean:
@@ -64,7 +63,7 @@ clean:
 	docker image prune -f
 
 deploy: prepare migrate promote
-	@echo "===> $(help_deploy)"
+	echo "===> $(help_deploy)"
 
 	# Prepare services green-blue deployment
 	# Cloud Run (KNative) services are not yet given any traffic,
@@ -126,7 +125,7 @@ auxiliary: gcloud coronadirect cron
 		docker buildx build --push -t "europe-docker.pkg.dev/just-russel/docker/backend/cron:$(API_VERSION)" -f Dockerfile.cron .
 
 server:
-	@echo "===> $(help_server)"
+	echo "===> $(help_server)"
 	docker compose -f docker-compose.yaml -f docker-compose.dev.yaml up
 
 services:
