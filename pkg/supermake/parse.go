@@ -12,7 +12,7 @@ import (
 	"strings"
 )
 
-var targetRegex = regexp.MustCompile(`^([a-zA-Z0-9-_.@]+):(?: +(.*))?$`)
+var targetRegex = regexp.MustCompile(`^([a-zA-Z0-9-/_.@]+):(?: +(.*))?$`)
 var executorRegex = regexp.MustCompile(`^\t*@([a-zA-Z0-9-_:.]+)( .*)?$`)
 var variableDeclarationRegex = regexp.MustCompile(`^(export +)?(\w+) +(=|:=|\?=) +(.*)$`)
 var variableRegex = regexp.MustCompile(`\$\((.*)\)`)
@@ -104,6 +104,17 @@ func (p *SuperMakeFileParser) parseGlobalVariables() (map[string]*Variable, erro
 	return variables, nil
 }
 
+func registerNestedTargets(prefix string, target *Target, targets map[string]*Target) {
+	name := getNestedTargetName(prefix, target.Name)
+	targets[name] = target
+
+	for _, subTarget := range target.SubTargets {
+		key := getNestedTargetName(target.Name, subTarget.Name)
+		targets[key] = subTarget
+		registerNestedTargets(name, subTarget, targets)
+	}
+}
+
 func (p *SuperMakeFileParser) parseTargets() (map[string]*Target, error) {
 	targets := make(map[string]*Target)
 
@@ -112,13 +123,13 @@ func (p *SuperMakeFileParser) parseTargets() (map[string]*Target, error) {
 			// If not at the last line
 			targetEnd := i
 			if i+1 <= len(p.indent) {
-				targetEnd = p.findBlockEnd(i)
+				targetEnd = findBlockEnd(p.indent, i)
 			}
-			target, err := parseTarget(p.lines[i:targetEnd+1], p.indent[i:targetEnd+1])
+			target, err := parseTarget(p.lines[i:targetEnd], p.indent[i:targetEnd])
 			if err != nil {
 				return nil, err
 			}
-			targets[target.Name] = target
+			registerNestedTargets("", target, targets)
 		}
 	}
 
@@ -145,16 +156,16 @@ func (p *SuperMakeFileParser) Parse() (*SupermakeFile, error) {
 
 // Find the end line of an indented block.
 // Assumes the given line is expected_block_indent - 1.
-func (p *SuperMakeFileParser) findBlockEnd(index int) int {
-	minIndentation := p.indent[index] + 1
+func findBlockEnd(indent []int, index int) int {
+	minIndentation := indent[index] + 1
 
-	for i := index + 1; i < len(p.indent); i++ {
-		if p.indent[i] < minIndentation {
+	for i := index + 1; i < len(indent); i++ {
+		if indent[i] < minIndentation {
 			return i
 		}
 	}
 
-	return len(p.indent)
+	return len(indent)
 }
 
 func (s *SupermakeFile) Run(target string) error {
@@ -209,11 +220,17 @@ func stripTrailingComment(line string) string {
 	return line
 }
 
+func getNestedTargetName(parent, name string) string {
+	if parent != "" {
+		return fmt.Sprintf("%s::%s", parent, name)
+	}
+	return name
+}
+
 // Parse a target.
 // Assumes the target declaration is the first line.
 func parseTarget(lines []string, indentationLevels []int) (*Target, error) {
 	headerParts := strings.SplitN(lines[0], ":", 2)
-	indentationLevel := indentationLevels[0]
 
 	// Name & Node
 	nameParts := strings.SplitN(headerParts[0], "@", 2)
@@ -224,27 +241,48 @@ func parseTarget(lines []string, indentationLevels []int) (*Target, error) {
 	}
 
 	// Dependencies
-	rawDeps := strings.Split(headerParts[1], " ")
-	dependencies := make([]string, 0, len(rawDeps))
-	for _, dep := range rawDeps {
-		if len(dep) > 0 {
-			dependencies = append(dependencies, strings.TrimSpace(dep))
+	dependencies := make([]string, 0)
+	if len(headerParts) > 1 {
+		rawDeps := strings.Split(headerParts[1], " ")
+		for _, dep := range rawDeps {
+			if len(dep) > 0 {
+				dependencies = append(dependencies, strings.TrimSpace(dep))
+			}
 		}
 	}
 
+	// Sub Targets
+	subTargets := make(map[string]*Target)
+
 	// Steps & executors
 	steps := make([]Runable, 0)
-	currentCommands := make([]Executable, 0)
-	var currentExecutor Executor = new(LocalEnvironment)
+	currentCommands := make([]Command, 0)
+	var currentExecutor CommandExecutor = new(LocalEnvironment)
 
-	for i, line := range lines[1:] {
-		// Ignore line if part of nested target
-		if indentationLevels[i+1] != indentationLevel {
-			continue
-		}
+	for i := 1; i < len(lines); i++ {
+		line := lines[i]
 
-		// If executor line, end the current command group.
-		if executorRegex.MatchString(line) {
+		// Subtargets
+		if targetRegex.MatchString(line) {
+			blockEnd := findBlockEnd(indentationLevels, i)
+			subTarget, err := parseTarget(lines[i:blockEnd], indentationLevels[i:blockEnd])
+			if err != nil {
+				return nil, err
+			}
+			subTargets[subTarget.Name] = subTarget
+			if len(currentCommands) > 0 {
+				steps = append(steps, &CommandGroup{
+					Environment: currentExecutor,
+					Steps:       currentCommands,
+				})
+			}
+			currentCommands = make([]Command, 0)
+			currentExecutor = new(LocalEnvironment)
+			steps = append(steps, subTarget)
+			i = blockEnd - 1
+			// Executors
+		} else if executorRegex.MatchString(line) {
+			// If commands were defined, save them in a new command group
 			if len(currentCommands) > 0 {
 				steps = append(steps, &CommandGroup{
 					Environment: currentExecutor,
@@ -253,11 +291,15 @@ func parseTarget(lines []string, indentationLevels []int) (*Target, error) {
 			}
 
 			groups := executorRegex.FindStringSubmatch(line)
+
+			// Reset commands & executor
+			currentCommands = make([]Command, 0)
 			currentExecutor = &DockerEnvironment{
 				Image:      strings.TrimSpace(groups[1]),
 				Entrypoint: strings.TrimSpace(groups[2]),
 			}
 		} else {
+			// Commands
 			command := &ShellCommand{
 				Command: line,
 			}
@@ -271,12 +313,20 @@ func parseTarget(lines []string, indentationLevels []int) (*Target, error) {
 		Steps:       currentCommands,
 	})
 
-	return &Target{
+	target := &Target{
 		Name:         name,
 		Dependencies: dependencies,
 		Node:         node,
 		Steps:        steps,
-	}, nil
+		SubTargets:   subTargets,
+		Parent:       nil,
+	}
+
+	for _, t := range subTargets {
+		t.Parent = target
+	}
+
+	return target, nil
 }
 
 func runShellScript(script string, variables map[string]*Variable) ([]byte, error) {

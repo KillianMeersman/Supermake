@@ -2,8 +2,8 @@ package supermake
 
 import "context"
 
-type Executable interface {
-	GetCommands() []string
+type Command interface {
+	GetShellCommands() []string
 }
 
 type Runable interface {
@@ -14,19 +14,19 @@ type ShellCommand struct {
 	Command string
 }
 
-func (c *ShellCommand) GetCommands() []string {
+func (c *ShellCommand) GetShellCommands() []string {
 	return []string{c.Command}
 }
 
 type CommandGroup struct {
-	Environment Executor
-	Steps       []Executable
+	Environment CommandExecutor
+	Steps       []Command
 }
 
-func (c *CommandGroup) GetCommands() []string {
+func (c *CommandGroup) GetShellCommands() []string {
 	commands := make([]string, 0)
 	for _, step := range c.Steps {
-		commands = append(commands, step.GetCommands()...)
+		commands = append(commands, step.GetShellCommands()...)
 	}
 
 	return commands
@@ -49,6 +49,8 @@ type Target struct {
 	Dependencies []string
 	Steps        []Runable
 	Variables    map[string]*Variable
+	SubTargets   map[string]*Target
+	Parent       *Target
 }
 
 func (t *Target) Run(ctx context.Context, workDir string) error {

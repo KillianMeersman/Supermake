@@ -13,8 +13,8 @@ import (
 	v1 "github.com/opencontainers/image-spec/specs-go/v1"
 )
 
-type Executor interface {
-	Execute(ctx context.Context, workingDir string, executable Executable) error
+type CommandExecutor interface {
+	Execute(ctx context.Context, workingDir string, command Command) error
 }
 
 type DockerEnvironment struct {
@@ -22,7 +22,7 @@ type DockerEnvironment struct {
 	Entrypoint string
 }
 
-func (d *DockerEnvironment) Execute(ctx context.Context, workingDir string, executable Executable) error {
+func (d *DockerEnvironment) Execute(ctx context.Context, workingDir string, command Command) error {
 	client, err := client.NewClientWithOpts()
 	if err != nil {
 		return err
@@ -32,7 +32,7 @@ func (d *DockerEnvironment) Execute(ctx context.Context, workingDir string, exec
 	config := &container.Config{
 		Image:      d.Image,
 		Entrypoint: []string{d.Entrypoint},
-		Cmd:        executable.GetCommands(),
+		Cmd:        command.GetShellCommands(),
 		WorkingDir: dockerWorkingDir,
 	}
 	hostConfig := &container.HostConfig{
@@ -59,14 +59,25 @@ func (d *DockerEnvironment) Execute(ctx context.Context, workingDir string, exec
 	return nil
 }
 
-type LocalEnvironment struct{}
+type LocalEnvironment struct {
+	Entrypoint string
+}
 
-func (l *LocalEnvironment) Execute(ctx context.Context, workingDir string, executable Executable) error {
+func (l *LocalEnvironment) Execute(ctx context.Context, workingDir string, command Command) error {
 
-	for _, command := range executable.GetCommands() {
+	for _, command := range command.GetShellCommands() {
 		parts := strings.Split(command, " ")
-		cmd := exec.Command(parts[0], parts[1:]...)
-		cmd.Run()
+		command := parts[0]
+		args := parts[1:]
+		if l.Entrypoint != "" {
+			command = l.Entrypoint
+			args = parts
+		}
+		cmd := exec.Command(command, args...)
+		err := cmd.Run()
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }
