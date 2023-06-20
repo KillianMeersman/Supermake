@@ -1,51 +1,25 @@
-package supermake
+package parse
 
 import (
 	"bytes"
-	"context"
-	"errors"
 	"fmt"
 	"log"
 	"os"
 	"os/exec"
 	"regexp"
 	"strings"
+
+	"github.com/KillianMeersman/Supermake/pkg/supermake"
+	"github.com/KillianMeersman/Supermake/pkg/supermake/executables"
+	"github.com/KillianMeersman/Supermake/pkg/supermake/executors"
 )
 
 var targetRegex = regexp.MustCompile(`^([a-zA-Z0-9-/_.@]+):(?: +(.*))?$`)
 var executorRegex = regexp.MustCompile(`^\t*@([a-zA-Z0-9-_:.]+)( .*)?$`)
 var variableDeclarationRegex = regexp.MustCompile(`^(export +)?(\w+) +(=|:=|\?=) +(.*)$`)
-var variableRegex = regexp.MustCompile(`\$\((.*)\)`)
+var variableRegex = regexp.MustCompile(`\$\((.*?)\)`)
 
 const COMMENT_CHARS = "#"
-
-type VariableEvaluationType int
-
-const (
-	RECURSIVE VariableEvaluationType = iota
-	FALLBACK
-)
-
-type Variable struct {
-	Name           string
-	EvaluationType VariableEvaluationType
-	Export         bool
-	value          string
-}
-
-func (v *Variable) Value() string {
-	if v.EvaluationType == FALLBACK {
-		if v, ok := os.LookupEnv(v.Name); ok {
-			return v
-		}
-	}
-	return v.value
-}
-
-type SupermakeFile struct {
-	Targets   map[string]*Target
-	Variables map[string]*Variable
-}
 
 type SuperMakeFileParser struct {
 	rawLines []string
@@ -88,8 +62,8 @@ func (p *SuperMakeFileParser) cleanAndMapLines() {
 	}
 }
 
-func (p *SuperMakeFileParser) parseGlobalVariables() (map[string]*Variable, error) {
-	variables := make(map[string]*Variable)
+func (p *SuperMakeFileParser) parseGlobalVariables() (map[string]*supermake.Variable, error) {
+	variables := make(map[string]*supermake.Variable)
 
 	for i, line := range p.lines {
 		if variableDeclarationRegex.MatchString(line) {
@@ -104,7 +78,7 @@ func (p *SuperMakeFileParser) parseGlobalVariables() (map[string]*Variable, erro
 	return variables, nil
 }
 
-func registerNestedTargets(prefix string, target *Target, targets map[string]*Target) {
+func registerNestedTargets(prefix string, target *supermake.Target, targets map[string]*supermake.Target) {
 	name := getNestedTargetName(prefix, target.Name)
 	targets[name] = target
 
@@ -115,8 +89,8 @@ func registerNestedTargets(prefix string, target *Target, targets map[string]*Ta
 	}
 }
 
-func (p *SuperMakeFileParser) parseTargets() (map[string]*Target, error) {
-	targets := make(map[string]*Target)
+func (p *SuperMakeFileParser) parseTargets(variables map[string]*supermake.Variable) (map[string]*supermake.Target, error) {
+	targets := make(map[string]*supermake.Target)
 
 	for i, line := range p.lines {
 		if targetRegex.MatchString(line) {
@@ -125,7 +99,7 @@ func (p *SuperMakeFileParser) parseTargets() (map[string]*Target, error) {
 			if i+1 <= len(p.indent) {
 				targetEnd = findBlockEnd(p.indent, i)
 			}
-			target, err := parseTarget(p.lines[i:targetEnd], p.indent[i:targetEnd])
+			target, err := parseTarget(p.lines[i:targetEnd], p.indent[i:targetEnd], variables)
 			if err != nil {
 				return nil, err
 			}
@@ -136,19 +110,19 @@ func (p *SuperMakeFileParser) parseTargets() (map[string]*Target, error) {
 	return targets, nil
 }
 
-func (p *SuperMakeFileParser) Parse() (*SupermakeFile, error) {
+func (p *SuperMakeFileParser) Parse() (*supermake.SupermakeFile, error) {
 	p.cleanAndMapLines()
 	globalVariables, err := p.parseGlobalVariables()
 	if err != nil {
 		return nil, err
 	}
 
-	targets, err := p.parseTargets()
+	targets, err := p.parseTargets(globalVariables)
 	if err != nil {
 		return nil, err
 	}
 
-	return &SupermakeFile{
+	return &supermake.SupermakeFile{
 		Targets:   targets,
 		Variables: globalVariables,
 	}, nil
@@ -166,15 +140,6 @@ func findBlockEnd(indent []int, index int) int {
 	}
 
 	return len(indent)
-}
-
-func (s *SupermakeFile) Run(target string) error {
-	t, ok := s.Targets[target]
-	if !ok {
-		return fmt.Errorf("no such target: %s", target)
-	}
-
-	return t.Run(context.TODO(), ".")
 }
 
 // Get the index of the first non-whitespace character.
@@ -229,7 +194,7 @@ func getNestedTargetName(parent, name string) string {
 
 // Parse a target.
 // Assumes the target declaration is the first line.
-func parseTarget(lines []string, indentationLevels []int) (*Target, error) {
+func parseTarget(lines []string, indentationLevels []int, variables map[string]*supermake.Variable) (*supermake.Target, error) {
 	headerParts := strings.SplitN(lines[0], ":", 2)
 
 	// Name & Node
@@ -252,39 +217,43 @@ func parseTarget(lines []string, indentationLevels []int) (*Target, error) {
 	}
 
 	// Sub Targets
-	subTargets := make(map[string]*Target)
+	subTargets := make(map[string]*supermake.Target)
 
 	// Steps & executors
-	steps := make([]Runable, 0)
-	currentCommands := make([]Command, 0)
-	var currentExecutor CommandExecutor = new(LocalEnvironment)
+	steps := make([]supermake.Runable, 0)
+	currentCommands := make([]executables.Command, 0)
+	var currentExecutor executors.CommandExecutor = new(executors.LocalEnvironment)
 
 	for i := 1; i < len(lines); i++ {
 		line := lines[i]
+		line, err := evaluateVariables(line, variables)
+		if err != nil {
+			return nil, err
+		}
 
 		// Subtargets
 		if targetRegex.MatchString(line) {
 			blockEnd := findBlockEnd(indentationLevels, i)
-			subTarget, err := parseTarget(lines[i:blockEnd], indentationLevels[i:blockEnd])
+			subTarget, err := parseTarget(lines[i:blockEnd], indentationLevels[i:blockEnd], variables)
 			if err != nil {
 				return nil, err
 			}
 			subTargets[subTarget.Name] = subTarget
 			if len(currentCommands) > 0 {
-				steps = append(steps, &CommandGroup{
+				steps = append(steps, &supermake.CommandGroup{
 					Environment: currentExecutor,
 					Steps:       currentCommands,
 				})
 			}
-			currentCommands = make([]Command, 0)
-			currentExecutor = new(LocalEnvironment)
+			currentCommands = make([]executables.Command, 0)
+			currentExecutor = new(executors.LocalEnvironment)
 			steps = append(steps, subTarget)
 			i = blockEnd - 1
 			// Executors
 		} else if executorRegex.MatchString(line) {
 			// If commands were defined, save them in a new command group
 			if len(currentCommands) > 0 {
-				steps = append(steps, &CommandGroup{
+				steps = append(steps, &supermake.CommandGroup{
 					Environment: currentExecutor,
 					Steps:       currentCommands,
 				})
@@ -293,14 +262,14 @@ func parseTarget(lines []string, indentationLevels []int) (*Target, error) {
 			groups := executorRegex.FindStringSubmatch(line)
 
 			// Reset commands & executor
-			currentCommands = make([]Command, 0)
-			currentExecutor = &DockerEnvironment{
+			currentCommands = make([]executables.Command, 0)
+			currentExecutor = &executors.DockerEnvironment{
 				Image:      strings.TrimSpace(groups[1]),
 				Entrypoint: strings.TrimSpace(groups[2]),
 			}
 		} else {
 			// Commands
-			command := &ShellCommand{
+			command := &executables.ShellCommand{
 				Command: line,
 			}
 			currentCommands = append(currentCommands, command)
@@ -308,12 +277,12 @@ func parseTarget(lines []string, indentationLevels []int) (*Target, error) {
 	}
 
 	// Add the remaining command group
-	steps = append(steps, &CommandGroup{
+	steps = append(steps, &supermake.CommandGroup{
 		Environment: currentExecutor,
 		Steps:       currentCommands,
 	})
 
-	target := &Target{
+	target := &supermake.Target{
 		Name:         name,
 		Dependencies: dependencies,
 		Node:         node,
@@ -329,7 +298,7 @@ func parseTarget(lines []string, indentationLevels []int) (*Target, error) {
 	return target, nil
 }
 
-func runShellScript(script string, variables map[string]*Variable) ([]byte, error) {
+func runShellScript(script string, variables map[string]*supermake.Variable) ([]byte, error) {
 	cmd := exec.Command("sh", "-c", script)
 	// Set environment variables
 	for _, v := range variables {
@@ -350,50 +319,36 @@ func runShellScript(script string, variables map[string]*Variable) ([]byte, erro
 	return stdout.Bytes(), nil
 }
 
-func evaluateVariables(line string, variables map[string]*Variable) (string, error) {
-	substitutions := make(map[string]string)
-
-	for _, match := range variableRegex.FindAllStringSubmatch(line, -1) {
-		wholeMatch := match[0]
-		rawIdentifier := match[1]
-		if len(rawIdentifier) < 1 {
-			return "", errors.New("empty variable")
-		}
-
-		// Substitute nested variables
-		evaluatedIdentifier, err := evaluateVariables(rawIdentifier, variables)
-		if err != nil {
-			return "", err
-		}
-
-		if strings.HasPrefix(evaluatedIdentifier, "shell ") {
-			shellString := strings.TrimPrefix(evaluatedIdentifier, "shell ")
+func evaluateVariables(line string, variables map[string]*supermake.Variable) (string, error) {
+	line, err := ReplaceVariables(line, func(v string) (string, error) {
+		if strings.HasPrefix(v, "shell ") {
+			// Run shell command
+			shellString := strings.TrimPrefix(v, "shell ")
 			stdout, err := runShellScript(shellString, variables)
 			if err != nil {
 				return "", fmt.Errorf("variable shell command failed to execute: '%s': %s", shellString, err)
 			}
 			t := strings.TrimRight(string(stdout), "\n\r")
-			substitutions[wholeMatch] = t
+			return t, nil
 		} else {
-			if variable, ok := variables[evaluatedIdentifier]; ok {
-				substitutions[wholeMatch] = variable.Value()
-			} else if variable, ok := os.LookupEnv(evaluatedIdentifier); ok {
-				substitutions[wholeMatch] = variable
+			if variable, ok := variables[v]; ok {
+				return variable.Value(), nil
+			} else if variable, ok := os.LookupEnv(v); ok {
+				return variable, nil
 			} else {
-				return "", fmt.Errorf("unknown variable for '%s': '%s'", line, evaluatedIdentifier)
+				return "", fmt.Errorf("unknown variable for '%s': '%s'", line, v)
 			}
 		}
+	})
 
-	}
-
-	for placeholder, substitution := range substitutions {
-		line = strings.ReplaceAll(line, placeholder, substitution)
+	if err != nil {
+		return "", err
 	}
 
 	return line, nil
 }
 
-func parseVariable(line string, variables map[string]*Variable) (*Variable, error) {
+func parseVariable(line string, variables map[string]*supermake.Variable) (*supermake.Variable, error) {
 	groups := variableDeclarationRegex.FindStringSubmatch(line)
 	export := false
 
@@ -406,12 +361,12 @@ func parseVariable(line string, variables map[string]*Variable) (*Variable, erro
 	identifier := groups[2]
 
 	// Evaluation type
-	var evaluationType VariableEvaluationType
+	var evaluationType supermake.VariableEvaluationType
 	switch groups[3] {
 	case "=", ":=":
-		evaluationType = RECURSIVE
+		evaluationType = supermake.RECURSIVE
 	case "?=":
-		evaluationType = FALLBACK
+		evaluationType = supermake.FALLBACK
 	default:
 		return nil, fmt.Errorf("invalid variable evaluation type '%b'", line[3])
 	}
@@ -422,15 +377,10 @@ func parseVariable(line string, variables map[string]*Variable) (*Variable, erro
 		return nil, err
 	}
 
-	return &Variable{
-		Name:           identifier,
-		EvaluationType: evaluationType,
-		Export:         export,
-		value:          value,
-	}, nil
+	return supermake.NewVariable(identifier, evaluationType, export, value), nil
 }
 
-func ParseSupermakeFileV2(path string) (*SupermakeFile, error) {
+func ParseSupermakeFileV2(path string) (*supermake.SupermakeFile, error) {
 	dataBytes, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err

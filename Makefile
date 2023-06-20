@@ -1,5 +1,5 @@
 run: build
-	./supermake test
+	./supermake help
 
 build:
 	go generate ./...

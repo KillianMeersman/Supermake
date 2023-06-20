@@ -5,7 +5,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/KillianMeersman/Supermake/pkg/supermake"
+	"github.com/KillianMeersman/Supermake/pkg/supermake/parse"
 	"github.com/spf13/cobra"
 )
 
@@ -14,11 +14,14 @@ var rootCmd = &cobra.Command{
 	Short: "Supermake is a modern CI pipelining tool",
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		file, err := supermake.ParseSupermakeFileV2("./Supermake")
+		file, err := parse.ParseSupermakeFileV2("./Supermake")
 		if err != nil {
 			log.Fatal(err)
 		}
-		file.Run(args[0])
+		err = file.Run(args[0])
+		if err != nil {
+			log.Fatal(err)
+		}
 	},
 }
 

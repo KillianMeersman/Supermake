@@ -1,16 +1,42 @@
 package supermake
 
-import "fmt"
+import (
+	"errors"
+	"fmt"
+)
 
 type TargetDAG struct {
 	levels [][]string
 }
 
-func ComputeTargetDAG(targets map[string]Target, start *Target) error {
+// Get the target's dependencies, including the
+func getTargetDependencies(target *Target, deps map[string]struct{}) error {
+	for _, dep := range target.Dependencies {
+		if dep == target.Name {
+			return errors.New("nested targets may not list their parent as a dependency")
+		}
+		deps[dep] = struct{}{}
+	}
+
+	for _, subTarget := range target.SubTargets {
+		getTargetDependencies(subTarget, deps)
+	}
+
+	if target.Parent != nil {
+		deps[target.Parent.Name] = struct{}{}
+	}
+
+	return nil
+}
+
+func ComputeTargetDAG(targets map[string]*Target, start string) error {
 	seenTargets := make(map[string]struct{})
 	levels := make([][]string, 0)
 
-	currentTarget := start
+	currentTarget, ok := targets[start]
+	if !ok {
+		return fmt.Errorf("unknown target: %s", start)
+	}
 	currentLevel := 0
 
 	for { // level

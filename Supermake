@@ -17,10 +17,14 @@ export SERVICE_ACCOUNT := $(ENVIRONMENT)
 
 export SENTRY_ORG := just-russel
 
+STAGING_DIR = $(shell mktemp -d)
+
 # This help target is first because it is the default when
 # not specifying one.
 help:
-	@alpine:3 bash
+	@alpine:3 sh
+	ls -l
+	echo $(STAGING_DIR)
 	echo $(help_attach)
 	echo $(help_build)
 	echo $(help_console)
