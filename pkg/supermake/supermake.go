@@ -4,6 +4,9 @@ import (
 	"context"
 	"fmt"
 	"os"
+
+	"github.com/KillianMeersman/Supermake/pkg/supermake/executors"
+	"github.com/KillianMeersman/Supermake/pkg/supermake/log"
 )
 
 type VariableEvaluationType int
@@ -53,5 +56,12 @@ func (s *SupermakeFile) Run(target string) error {
 	if err != nil {
 		return err
 	}
-	return t.Run(context.TODO(), s, cwd)
+
+	logger := log.NewLogger(log.DEBUG, log.ShellColoredLevels, os.Stderr)
+
+	return t.Run(context.TODO(), executors.ExecutorContext{
+		map[string]string{},
+		cwd,
+		logger,
+	}, s)
 }

@@ -4,10 +4,12 @@ import (
 	"context"
 	"fmt"
 	"sync"
+
+	"github.com/KillianMeersman/Supermake/pkg/supermake/executors"
 )
 
 type Runable interface {
-	Run(ctx context.Context, file *SupermakeFile, workDir string) error
+	Run(ctx context.Context, execCtx executors.ExecutorContext, file *SupermakeFile) error
 }
 
 type Target struct {
@@ -20,7 +22,7 @@ type Target struct {
 	Parent       *Target
 }
 
-func (t *Target) runDependencies(ctx context.Context, file *SupermakeFile, workDir string) error {
+func (t *Target) runDependencies(ctx context.Context, execCtx executors.ExecutorContext, file *SupermakeFile) error {
 	errChan := make(chan error)
 	doneChan := make(chan struct{})
 	wg := new(sync.WaitGroup)
@@ -36,7 +38,7 @@ func (t *Target) runDependencies(ctx context.Context, file *SupermakeFile, workD
 		wg.Add(1)
 		go func(t *Target) {
 			defer wg.Done()
-			err := t.Run(subTargetCtx, file, workDir)
+			err := t.Run(subTargetCtx, execCtx, file)
 			if err != nil {
 				errChan <- err
 			}
@@ -56,14 +58,17 @@ func (t *Target) runDependencies(ctx context.Context, file *SupermakeFile, workD
 	}
 }
 
-func (t *Target) Run(ctx context.Context, file *SupermakeFile, workDir string) error {
-	err := t.runDependencies(ctx, file, workDir)
+func (t *Target) Run(ctx context.Context, execCtx executors.ExecutorContext, file *SupermakeFile) error {
+	err := t.runDependencies(ctx, execCtx, file)
 	if err != nil {
 		return err
 	}
 
+	logger := execCtx.Logger.With("target", t.Name)
+	execCtx.Logger = logger
+
 	for _, step := range t.Steps {
-		err := step.Run(ctx, file, workDir)
+		err := step.Run(ctx, execCtx, file)
 		if err != nil {
 			return err
 		}

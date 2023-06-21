@@ -19,10 +19,17 @@ export SENTRY_ORG := just-russel
 
 STAGING_DIR = $(shell mktemp -d)
 
+python:
+	@python:3
+	import os
+	print("Hello world!")
+	print(os.environ)
+
 # This help target is first because it is the default when
 # not specifying one.
 help:
-	@alpine:3 sh
+	@alpine:3 sh -c
+	# echo "$(ls -l /etc)" > test.txt
 	ls -l
 	echo $(STAGING_DIR)
 	echo $(help_attach)

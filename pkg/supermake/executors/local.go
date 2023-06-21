@@ -13,7 +13,7 @@ type LocalEnvironment struct {
 	Entrypoint string
 }
 
-func (l *LocalEnvironment) Execute(ctx context.Context, workingDir string, command executables.Command) error {
+func (l *LocalEnvironment) Execute(ctx context.Context, execCtx ExecutorContext, command executables.Command) error {
 
 	for _, command := range command.GetShellCommands() {
 		// Split the command and arguments
