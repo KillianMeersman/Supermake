@@ -57,7 +57,7 @@ func (s *SupermakeFile) Run(target string) error {
 		return err
 	}
 
-	logger := log.NewLogger(log.DEBUG, log.ShellColoredLevels, os.Stdout, os.Stderr)
+	logger := log.NewLogger(log.TRACE, log.ShellColoredLevels, os.Stdout, os.Stderr)
 	err = t.Run(context.TODO(), executors.ExecutorContext{
 		map[string]string{},
 		s.Targets,

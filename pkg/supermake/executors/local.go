@@ -6,13 +6,20 @@ import (
 	"context"
 	"io"
 	"os/exec"
+	"strings"
 
 	"github.com/KillianMeersman/Supermake/pkg/supermake/executables"
 	"github.com/KillianMeersman/Supermake/pkg/supermake/util"
 )
 
 type LocalEnvironment struct {
-	Entrypoint string
+	Entrypoint []string
+}
+
+func NewLocalEnvironment() *LocalEnvironment {
+	return &LocalEnvironment{
+		Entrypoint: []string{"bash", "-c"},
+	}
 }
 
 func (l *LocalEnvironment) Execute(ctx context.Context, execCtx ExecutorContext, command executables.Command) error {
@@ -20,13 +27,17 @@ func (l *LocalEnvironment) Execute(ctx context.Context, execCtx ExecutorContext,
 	for _, command := range command.GetShellCommands() {
 		// Split the command and arguments
 		parts := util.SplitWords(command)
-		command := parts[0]
+		program := parts[0]
 		args := parts[1:]
-		if l.Entrypoint != "" {
-			command = l.Entrypoint
-			args = parts
+
+		if len(l.Entrypoint) > 0 {
+			program = l.Entrypoint[0]
+			args = l.Entrypoint[1:]
+			args = append(args, strings.Join(parts, " "))
 		}
-		cmd := exec.Command(command, args...)
+
+		execCtx.Logger.Trace("running command", "command", command)
+		cmd := exec.Command(program, args...)
 
 		stdout := new(bytes.Buffer)
 

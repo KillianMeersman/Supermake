@@ -40,7 +40,7 @@ anotherhelp: anotherhelp2
 	echo testing!!!
 
 anotherhelp2:
-	echo "test..."
+	echo "test..." > test.txt
 
 	test_a: test_b
 		echo "test A"

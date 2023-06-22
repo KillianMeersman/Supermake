@@ -214,7 +214,7 @@ func parseTarget(lines []string, indentationLevels []int, variables map[string]*
 	// Steps & executors
 	steps := make([]executors.Runable, 0)
 	currentCommands := make([]executables.Command, 0)
-	var currentExecutor executors.CommandExecutor = new(executors.LocalEnvironment)
+	var currentExecutor executors.CommandExecutor = executors.NewLocalEnvironment()
 
 	for i := 1; i < len(lines); i++ {
 		line := lines[i]
@@ -238,7 +238,7 @@ func parseTarget(lines []string, indentationLevels []int, variables map[string]*
 				})
 			}
 			currentCommands = make([]executables.Command, 0)
-			currentExecutor = new(executors.LocalEnvironment)
+			currentExecutor = executors.NewLocalEnvironment()
 			steps = append(steps, subTarget)
 			i = blockEnd - 1
 			// Executors

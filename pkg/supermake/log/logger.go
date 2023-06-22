@@ -27,6 +27,9 @@ func ShellColoredLevels(level LogLevel, message string, fields map[string]string
 	levelStr := "???"
 	levelFormatting := []ShellFormatting{Reset}
 	switch level {
+	case TRACE:
+		levelStr = "TRACE"
+		levelFormatting = []ShellFormatting{FgWhite, Faint}
 	case DEBUG:
 		levelStr = "DEBUG"
 		levelFormatting = []ShellFormatting{FgWhite, Faint}
@@ -90,6 +93,10 @@ func (l *Logger) log(level LogLevel, msg string, out io.Writer, fields ...string
 
 	formattedMessage := l.Formatter(level, msg, combinedFields)
 	out.Write(formattedMessage)
+}
+
+func (l *Logger) Trace(msg string, fields ...string) {
+	l.log(TRACE, msg, l.stdout, fields...)
 }
 
 func (l *Logger) Debug(msg string, fields ...string) {
