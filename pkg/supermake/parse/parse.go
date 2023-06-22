@@ -78,8 +78,8 @@ func (p *SuperMakeFileParser) parseGlobalVariables() (map[string]*supermake.Vari
 	return variables, nil
 }
 
-func (p *SuperMakeFileParser) parseTargets(variables map[string]*supermake.Variable) (map[string]*supermake.Target, error) {
-	targets := make(map[string]*supermake.Target)
+func (p *SuperMakeFileParser) parseTargets(variables map[string]*supermake.Variable) (map[string]executors.Runable, error) {
+	targets := make(map[string]executors.Runable)
 
 	for i := 0; i < len(p.lines); i++ {
 		line := p.lines[i]
@@ -94,7 +94,7 @@ func (p *SuperMakeFileParser) parseTargets(variables map[string]*supermake.Varia
 			if err != nil {
 				return nil, err
 			}
-			targets[target.Name] = target
+			targets[target.Name()] = target
 			i = targetEnd - 1
 		}
 	}
@@ -212,7 +212,7 @@ func parseTarget(lines []string, indentationLevels []int, variables map[string]*
 	subTargets := make(map[string]*supermake.Target)
 
 	// Steps & executors
-	steps := make([]supermake.Runable, 0)
+	steps := make([]executors.Runable, 0)
 	currentCommands := make([]executables.Command, 0)
 	var currentExecutor executors.CommandExecutor = new(executors.LocalEnvironment)
 
@@ -230,7 +230,7 @@ func parseTarget(lines []string, indentationLevels []int, variables map[string]*
 			if err != nil {
 				return nil, err
 			}
-			subTargets[subTarget.Name] = subTarget
+			subTargets[subTarget.Name()] = subTarget
 			if len(currentCommands) > 0 {
 				steps = append(steps, &supermake.CommandGroup{
 					Environment: currentExecutor,

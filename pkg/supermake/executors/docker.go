@@ -166,7 +166,7 @@ searchimages:
 		Force: true,
 	})
 
-	execCtx.Logger.Debug("starting container")
+	execCtx.Logger.Info("starting container", "image", imageURL.String())
 	err = mobyClient.ContainerStart(ctx, dockerContainer.ID, types.ContainerStartOptions{})
 	if err != nil {
 		return err
@@ -181,7 +181,7 @@ searchimages:
 		return err
 	}
 
-	execCtx.Logger.Debug("container done")
+	execCtx.Logger.Info("container finished", "image", imageURL.String())
 	if err != nil {
 		return err
 	}

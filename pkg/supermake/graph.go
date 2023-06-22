@@ -12,7 +12,7 @@ type TargetDAG struct {
 // Get the target's dependencies, including the
 func getTargetDependencies(target *Target, deps map[string]struct{}) error {
 	for _, dep := range target.Dependencies {
-		if dep == target.Name {
+		if dep == target.Name() {
 			return errors.New("nested targets may not list their parent as a dependency")
 		}
 		deps[dep] = struct{}{}
@@ -23,7 +23,7 @@ func getTargetDependencies(target *Target, deps map[string]struct{}) error {
 	}
 
 	if target.Parent != nil {
-		deps[target.Parent.Name] = struct{}{}
+		deps[target.Parent.Name()] = struct{}{}
 	}
 
 	return nil

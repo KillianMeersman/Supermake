@@ -21,6 +21,10 @@ func (c *CommandGroup) GetShellCommands() []string {
 	return commands
 }
 
-func (c *CommandGroup) Run(ctx context.Context, execCtx executors.ExecutorContext, targets map[string]*Target) error {
+func (c *CommandGroup) Name() string {
+	return ""
+}
+
+func (c *CommandGroup) Run(ctx context.Context, execCtx executors.ExecutorContext) error {
 	return c.Environment.Execute(ctx, execCtx, c)
 }

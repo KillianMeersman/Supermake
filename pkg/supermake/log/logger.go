@@ -3,6 +3,7 @@ package log
 import (
 	"fmt"
 	"io"
+	"os"
 	"strings"
 )
 
@@ -108,6 +109,11 @@ func (l *Logger) Error(msg string, fields ...string) {
 }
 
 func (l *Logger) Fatal(msg string, fields ...string) {
+	l.log(FATAL, msg, l.stdout, fields...)
+	os.Exit(1)
+}
+
+func (l *Logger) Panic(msg string, fields ...string) {
 	l.log(FATAL, msg, l.stdout, fields...)
 	panic(msg)
 }

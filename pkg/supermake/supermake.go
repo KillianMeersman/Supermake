@@ -42,7 +42,7 @@ func (v *Variable) Value() string {
 }
 
 type SupermakeFile struct {
-	Targets   map[string]*Target
+	Targets   map[string]executors.Runable
 	Variables map[string]*Variable
 }
 
@@ -58,10 +58,17 @@ func (s *SupermakeFile) Run(target string) error {
 	}
 
 	logger := log.NewLogger(log.DEBUG, log.ShellColoredLevels, os.Stdout, os.Stderr)
-
-	return t.Run(context.TODO(), executors.ExecutorContext{
+	err = t.Run(context.TODO(), executors.ExecutorContext{
 		map[string]string{},
+		s.Targets,
+		make(map[string]executors.Runable),
 		cwd,
 		logger,
-	}, s.Targets)
+	})
+
+	if err != nil {
+		logger.Fatal(err.Error())
+	}
+
+	return nil
 }

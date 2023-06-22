@@ -8,15 +8,11 @@ import (
 	"github.com/KillianMeersman/Supermake/pkg/supermake/executors"
 )
 
-type Runable interface {
-	Run(ctx context.Context, execCtx executors.ExecutorContext, targets map[string]*Target) error
-}
-
 type Target struct {
-	Name         string
+	name         string
 	Node         string
 	Dependencies []string
-	Steps        []Runable
+	Steps        []executors.Runable
 	Variables    map[string]*Variable
 	SubTargets   map[string]*Target
 	Parent       *Target
@@ -24,9 +20,9 @@ type Target struct {
 	done         bool
 }
 
-func NewTarget(name, node string, dependencies []string, steps []Runable, Variables map[string]*Variable, subTargets map[string]*Target, Parent *Target) *Target {
+func NewTarget(name, node string, dependencies []string, steps []executors.Runable, Variables map[string]*Variable, subTargets map[string]*Target, Parent *Target) *Target {
 	return &Target{
-		Name:         name,
+		name:         name,
 		Dependencies: dependencies,
 		Node:         node,
 		Steps:        steps,
@@ -38,7 +34,7 @@ func NewTarget(name, node string, dependencies []string, steps []Runable, Variab
 }
 
 // Run the target's dependencies
-func (t *Target) runDependencies(ctx context.Context, execCtx executors.ExecutorContext, targets map[string]*Target) error {
+func (t *Target) runDependencies(ctx context.Context, execCtx executors.ExecutorContext, targets map[string]executors.Runable) error {
 	errChan := make(chan error)
 	doneChan := make(chan struct{})
 	wg := new(sync.WaitGroup)
@@ -52,12 +48,18 @@ func (t *Target) runDependencies(ctx context.Context, execCtx executors.Executor
 			return fmt.Errorf("unknown dependency target '%s'", subTargetName)
 		}
 
+		for name := range execCtx.ParentTargets {
+			if name == dependencyTarget.Name() {
+				return fmt.Errorf("target dependency loop %s -> %s", t.name, subTargetName)
+			}
+		}
+
 		wg.Add(1)
 
-		execCtx.Logger.Debug("running dependency target", "dependency", dependencyTarget.Name)
+		execCtx.Logger.Debug("running dependency target", "dependency", dependencyTarget.Name())
 		go func() {
 			defer wg.Done()
-			err := dependencyTarget.Run(subTargetCtx, execCtx, targets)
+			err := dependencyTarget.Run(subTargetCtx, execCtx)
 			if err != nil {
 				errChan <- err
 			}
@@ -81,7 +83,11 @@ func (t *Target) Reset() {
 	t.done = false
 }
 
-func (t *Target) Run(ctx context.Context, execCtx executors.ExecutorContext, targets map[string]*Target) error {
+func (t *Target) Name() string {
+	return t.name
+}
+
+func (t *Target) Run(ctx context.Context, execCtx executors.ExecutorContext) error {
 	t.lock.Lock()
 	defer t.lock.Unlock()
 
@@ -90,18 +96,21 @@ func (t *Target) Run(ctx context.Context, execCtx executors.ExecutorContext, tar
 	}
 	t.done = true
 
-	logger := execCtx.Logger.With("target", t.Name)
+	logger := execCtx.Logger.With("target", t.Name())
 	execCtx.Logger = logger
 
 	logger.Debug("running target")
 
-	targetsWithSubtargets := make(map[string]*Target)
-	for k, v := range targets {
+	targetsWithSubtargets := make(map[string]executors.Runable)
+	for k, v := range execCtx.Targets {
 		targetsWithSubtargets[k] = v
 	}
 	for k, v := range t.SubTargets {
 		targetsWithSubtargets[k] = v
 	}
+
+	execCtx.Targets = targetsWithSubtargets
+	execCtx.ParentTargets[t.name] = t
 
 	err := t.runDependencies(ctx, execCtx, targetsWithSubtargets)
 	if err != nil {
@@ -109,7 +118,7 @@ func (t *Target) Run(ctx context.Context, execCtx executors.ExecutorContext, tar
 	}
 
 	for _, step := range t.Steps {
-		err := step.Run(ctx, execCtx, targetsWithSubtargets)
+		err := step.Run(ctx, execCtx)
 		if err != nil {
 			return err
 		}
