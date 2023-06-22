@@ -78,21 +78,12 @@ func (p *SuperMakeFileParser) parseGlobalVariables() (map[string]*supermake.Vari
 	return variables, nil
 }
 
-func registerNestedTargets(prefix string, target *supermake.Target, targets map[string]*supermake.Target) {
-	name := getNestedTargetName(prefix, target.Name)
-	targets[name] = target
-
-	for _, subTarget := range target.SubTargets {
-		key := getNestedTargetName(target.Name, subTarget.Name)
-		targets[key] = subTarget
-		registerNestedTargets(name, subTarget, targets)
-	}
-}
-
 func (p *SuperMakeFileParser) parseTargets(variables map[string]*supermake.Variable) (map[string]*supermake.Target, error) {
 	targets := make(map[string]*supermake.Target)
 
-	for i, line := range p.lines {
+	for i := 0; i < len(p.lines); i++ {
+		line := p.lines[i]
+
 		if targetRegex.MatchString(line) {
 			// If not at the last line
 			targetEnd := i
@@ -103,7 +94,8 @@ func (p *SuperMakeFileParser) parseTargets(variables map[string]*supermake.Varia
 			if err != nil {
 				return nil, err
 			}
-			registerNestedTargets("", target, targets)
+			targets[target.Name] = target
+			i = targetEnd - 1
 		}
 	}
 
@@ -276,20 +268,15 @@ func parseTarget(lines []string, indentationLevels []int, variables map[string]*
 		}
 	}
 
-	// Add the remaining command group
-	steps = append(steps, &supermake.CommandGroup{
-		Environment: currentExecutor,
-		Steps:       currentCommands,
-	})
-
-	target := &supermake.Target{
-		Name:         name,
-		Dependencies: dependencies,
-		Node:         node,
-		Steps:        steps,
-		SubTargets:   subTargets,
-		Parent:       nil,
+	if len(currentCommands) > 0 {
+		// Add the remaining command group
+		steps = append(steps, &supermake.CommandGroup{
+			Environment: currentExecutor,
+			Steps:       currentCommands,
+		})
 	}
+
+	target := supermake.NewTarget(name, node, dependencies, steps, variables, subTargets, nil)
 
 	for _, t := range subTargets {
 		t.Parent = target

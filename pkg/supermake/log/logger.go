@@ -7,53 +7,64 @@ import (
 )
 
 func ShellColoredLevels(level LogLevel, message string, fields map[string]string) []byte {
-	fieldString := strings.Builder{}
+	target := "root"
 
+	fieldStrings := make([]string, 0, len(fields))
 	for k, v := range fields {
-		fieldString.WriteString(fmt.Sprintf("%s=%s", k, v))
+		if k == "target" {
+			target = v
+		} else {
+			fieldStrings = append(fieldStrings, fmt.Sprintf("%s=%s", k, v))
+		}
+	}
+
+	fieldString := strings.Join(fieldStrings, ", ")
+	if len(fieldString) > 0 {
+		fieldString = "[" + fieldString + "]"
 	}
 
 	levelStr := "???"
-	levelColor := Reset
+	levelFormatting := []ShellFormatting{Reset}
 	switch level {
 	case DEBUG:
 		levelStr = "DEBUG"
-		levelColor = White
+		levelFormatting = []ShellFormatting{FgWhite, Faint}
 	case INFO:
 		levelStr = "INFO"
-		levelColor = Blue
+		levelFormatting = []ShellFormatting{FgBlue}
 	case WARNING:
 		levelStr = "WARNING"
-		levelColor = Yellow
+		levelFormatting = []ShellFormatting{FgYellow, Bold}
 	case ERROR:
 		levelStr = "ERROR"
-		levelColor = Red
+		levelFormatting = []ShellFormatting{FgHiRed, Bold}
 	case FATAL:
 		levelStr = "FATAL"
-		levelColor = Purple
+		levelFormatting = []ShellFormatting{FgHiMagenta, Bold}
 	}
 
-	spaces := strings.Repeat(" ", 7-len(levelStr))
-	return []byte(fmt.Sprintf("%s%s%s|%s %s %s\n", levelColor, levelStr, spaces, Reset, message, fieldString.String()))
+	return []byte(TabulateRow().Field(levelStr, 9, levelFormatting...).Field(target, 15).Field("|", 1).Field(message, -1).Field(fieldString, -1).String())
 }
 
 type Logger struct {
 	fields    map[string]string
-	output    io.Writer
+	stdout    io.Writer
+	stderr    io.Writer
 	Level     LogLevel
 	Formatter LogFormatter
 }
 
-func NewLogger(level LogLevel, formatter LogFormatter, output io.Writer) *Logger {
+func NewLogger(level LogLevel, formatter LogFormatter, stdout, stderr io.Writer) *Logger {
 	return &Logger{
 		fields:    make(map[string]string),
 		Level:     level,
 		Formatter: formatter,
-		output:    output,
+		stdout:    stdout,
+		stderr:    stderr,
 	}
 }
 
-func (l *Logger) log(level LogLevel, msg string, fields ...string) {
+func (l *Logger) log(level LogLevel, msg string, out io.Writer, fields ...string) {
 	if len(fields)%2 != 0 {
 		panic("odd number of fields provided")
 	}
@@ -77,41 +88,50 @@ func (l *Logger) log(level LogLevel, msg string, fields ...string) {
 	}
 
 	formattedMessage := l.Formatter(level, msg, combinedFields)
-	l.output.Write(formattedMessage)
+	out.Write(formattedMessage)
 }
 
 func (l *Logger) Debug(msg string, fields ...string) {
-	l.log(DEBUG, msg, fields...)
+	l.log(DEBUG, msg, l.stdout, fields...)
 }
 
 func (l *Logger) Info(msg string, fields ...string) {
-	l.log(INFO, msg, fields...)
+	l.log(INFO, msg, l.stdout, fields...)
 }
 
 func (l *Logger) Warning(msg string, fields ...string) {
-	l.log(WARNING, msg, fields...)
+	l.log(WARNING, msg, l.stdout, fields...)
 }
 
 func (l *Logger) Error(msg string, fields ...string) {
-	l.log(ERROR, msg, fields...)
+	l.log(ERROR, msg, l.stdout, fields...)
 }
 
 func (l *Logger) Fatal(msg string, fields ...string) {
-	l.log(FATAL, msg, fields...)
+	l.log(FATAL, msg, l.stdout, fields...)
 	panic(msg)
 }
 
 func (l *Logger) With(fields ...string) *Logger {
-	newFields := make(map[string]string)
+	if len(fields)%2 != 0 {
+		panic("odd number of fields provided")
+	}
+
+	combinedFields := make(map[string]string)
 
 	for k, v := range l.fields {
-		newFields[k] = v
+		combinedFields[k] = v
+	}
+
+	for i := 1; i < len(fields); i += 2 {
+		combinedFields[fields[i-1]] = fields[i]
 	}
 
 	return &Logger{
-		fields:    newFields,
+		fields:    combinedFields,
 		Level:     l.Level,
 		Formatter: l.Formatter,
-		output:    l.output,
+		stdout:    l.stdout,
+		stderr:    l.stderr,
 	}
 }

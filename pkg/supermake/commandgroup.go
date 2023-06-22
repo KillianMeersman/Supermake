@@ -2,7 +2,6 @@ package supermake
 
 import (
 	"context"
-	"strings"
 
 	"github.com/KillianMeersman/Supermake/pkg/supermake/executables"
 	"github.com/KillianMeersman/Supermake/pkg/supermake/executors"
@@ -22,7 +21,6 @@ func (c *CommandGroup) GetShellCommands() []string {
 	return commands
 }
 
-func (c *CommandGroup) Run(ctx context.Context, execCtx executors.ExecutorContext, file *SupermakeFile) error {
-	command := &executables.ShellCommand{Command: strings.Join(c.GetShellCommands(), "\n")}
-	return c.Environment.Execute(ctx, execCtx, command)
+func (c *CommandGroup) Run(ctx context.Context, execCtx executors.ExecutorContext, targets map[string]*Target) error {
+	return c.Environment.Execute(ctx, execCtx, c)
 }

@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"strings"
 
 	"github.com/KillianMeersman/Supermake/pkg/supermake/executables"
@@ -125,6 +126,13 @@ searchimages:
 		if err != nil {
 			return err
 		}
+		data, err := ioutil.ReadAll(output)
+		if err != nil {
+			return err
+		}
+
+		fmt.Print(string(data))
+
 		defer output.Close()
 	} else {
 		execCtx.Logger.Debug("image already available", "image", imageURL.String())

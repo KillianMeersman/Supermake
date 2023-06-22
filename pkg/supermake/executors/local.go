@@ -1,8 +1,10 @@
 package executors
 
 import (
+	"bufio"
+	"bytes"
 	"context"
-	"os"
+	"io"
 	"os/exec"
 
 	"github.com/KillianMeersman/Supermake/pkg/supermake/executables"
@@ -25,15 +27,35 @@ func (l *LocalEnvironment) Execute(ctx context.Context, execCtx ExecutorContext,
 			args = parts
 		}
 		cmd := exec.Command(command, args...)
+
+		stdout := new(bytes.Buffer)
+
 		// Couple host streams to command, so that the user can see the output
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
+		cmd.Stdout = stdout
+		cmd.Stderr = stdout
 
 		// Run it
 		err := cmd.Run()
 		if err != nil {
 			return err
 		}
+
+		go func() {
+			reader := bufio.NewReader(stdout)
+
+			for {
+				line, err := reader.ReadBytes('\n')
+				if err != nil {
+					if err != io.EOF {
+						execCtx.Logger.Fatal(err.Error())
+					}
+					return
+				}
+
+				line = bytes.TrimRight(line, "\n\r")
+				execCtx.Logger.Info(string(line))
+			}
+		}()
 	}
 	return nil
 }
