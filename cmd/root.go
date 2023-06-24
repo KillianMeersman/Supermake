@@ -9,20 +9,29 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var file string = "./Supermake"
+
 var rootCmd = &cobra.Command{
-	Use:   "supermake",
+	Use:   "supermake target [target...]",
 	Short: "Supermake is a modern CI pipelining tool",
-	Args:  cobra.ExactArgs(1),
+	Args:  cobra.MinimumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		file, err := parse.ParseSupermakeFileV2("./Supermake")
+		file, err := parse.ParseSupermakeFileV2(file)
 		if err != nil {
 			log.Fatal(err)
 		}
-		err = file.Run(args[0])
-		if err != nil {
-			log.Fatal(err)
+
+		for _, target := range args {
+			err = file.Run(target)
+			if err != nil {
+				log.Fatal(err)
+			}
 		}
 	},
+}
+
+func init() {
+	rootCmd.PersistentFlags().StringVar(&file, "file", "./Supermake", "Supermake file to use")
 }
 
 func Execute() {

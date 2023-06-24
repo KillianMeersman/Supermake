@@ -6,7 +6,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"strings"
 
 	"github.com/KillianMeersman/Supermake/pkg/supermake/executables"
@@ -121,17 +120,18 @@ searchimages:
 		execCtx.Logger.Debug("pulling image", "image", imageURL.String())
 
 		output, err := mobyClient.ImagePull(ctx, imageURL.String(), types.ImagePullOptions{
-			All: true,
+			Platform: "linux/amd64",
+			All:      false,
 		})
 		if err != nil {
 			return err
 		}
-		data, err := ioutil.ReadAll(output)
-		if err != nil {
-			return err
-		}
+		// data, err := ioutil.ReadAll(output)
+		// if err != nil {
+		// 	return err
+		// }
 
-		fmt.Print(string(data))
+		// fmt.Print(string(data))
 
 		defer output.Close()
 	} else {

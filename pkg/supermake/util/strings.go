@@ -52,15 +52,19 @@ func SplitWords(data string) []string {
 
 // Split a string into lines.
 // Respects escaped newlines, combining both lines into one.
-// func SplitLines(data string) []string {
-// 	line := &strings.Builder{}
-// 	lines = make([]string, 0)
+func SplitLines(data string) []string {
+	lines := strings.Split(data, "\n")
+	escapedLines := make([]string, 0, len(lines))
+	escapedLineBuilder := strings.Builder{}
 
-// 	escaped := false
-// 	for _, char := range data {
-// 		if char == '\n' && !escaped {
+	for i := 0; i < len(lines); i++ {
+		line := strings.TrimRight(lines[i], " ")
+		escapedLineBuilder.WriteString(line)
 
-// 		}
-// 	}
-
-// }
+		if !strings.HasSuffix(line, `\`) {
+			escapedLines = append(escapedLines, escapedLineBuilder.String())
+			escapedLineBuilder.Reset()
+		}
+	}
+	return escapedLines
+}

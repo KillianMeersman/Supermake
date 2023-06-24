@@ -12,6 +12,7 @@ import (
 	"github.com/KillianMeersman/Supermake/pkg/supermake"
 	"github.com/KillianMeersman/Supermake/pkg/supermake/executables"
 	"github.com/KillianMeersman/Supermake/pkg/supermake/executors"
+	"github.com/KillianMeersman/Supermake/pkg/supermake/util"
 )
 
 var targetRegex = regexp.MustCompile(`^([a-zA-Z0-9-/_.@]+):(?: +(.*))?$`)
@@ -374,7 +375,7 @@ func ParseSupermakeFileV2(path string) (*supermake.SupermakeFile, error) {
 	}
 
 	data := string(dataBytes)
-	lines := strings.Split(data, "\n")
+	lines := util.SplitLines(data)
 
 	parser := NewParser(lines)
 	return parser.Parse()

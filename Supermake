@@ -22,7 +22,7 @@ STAGING_DIR = $(shell mktemp -d)
 # This help target is first because it is the default when
 # not specifying one.
 help: anotherhelp
-	@alpine:3 sh -c
+	@python:3 sh -c
 	# echo "$(ls -l /etc)" > test.txt
 	ls -l
 	pwd
@@ -40,7 +40,7 @@ anotherhelp: anotherhelp2
 	echo testing!!!
 
 anotherhelp2:
-	echo "test..." > test.txt
+	echo 'testing123...'
 
 	test_a: test_b
 		echo "test A"
