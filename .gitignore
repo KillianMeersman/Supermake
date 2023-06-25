@@ -1,1 +1,4 @@
 /supermake
+
+# test files
+/test-*

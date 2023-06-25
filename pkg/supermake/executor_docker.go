@@ -1,4 +1,4 @@
-package executors
+package supermake
 
 import (
 	"bufio"
@@ -8,8 +8,6 @@ import (
 	"io"
 	"strings"
 
-	"github.com/KillianMeersman/Supermake/pkg/supermake/executables"
-	"github.com/KillianMeersman/Supermake/pkg/supermake/log"
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/mount"
@@ -20,7 +18,7 @@ import (
 
 type DockerEnvironment struct {
 	Image      string
-	Entrypoint string
+	Entrypoint []string
 }
 
 type imageURL struct {
@@ -59,36 +57,7 @@ func (u *imageURL) String() string {
 	return fmt.Sprintf("%s/%s:%s", u.Registry, u.Name, u.Tag)
 }
 
-func streamContainerLogs(ctx context.Context, client *client.Client, containerID string, logger *log.Logger) error {
-	logReader, err := client.ContainerLogs(ctx, containerID, types.ContainerLogsOptions{
-		ShowStdout: true,
-		ShowStderr: true,
-	})
-	if err != nil {
-		return err
-	}
-
-	go func() {
-		defer logReader.Close()
-		reader := bufio.NewReader(logReader)
-		for {
-			line, err := reader.ReadBytes('\n')
-			line = bytes.TrimRight(line, "\n\r")
-
-			logger.Info(string(line))
-			if err != nil {
-				if err != io.EOF {
-					logger.Error(fmt.Sprintf("error streaming logs from container: %s", err))
-				}
-				return
-			}
-		}
-	}()
-
-	return nil
-}
-
-func (d *DockerEnvironment) Execute(ctx context.Context, execCtx ExecutorContext, command executables.Command) error {
+func (d *DockerEnvironment) Execute(ctx context.Context, execCtx ExecutorContext, command Command) error {
 	mobyClient, err := client.NewClientWithOpts()
 	if err != nil {
 		return err
@@ -138,12 +107,15 @@ searchimages:
 		execCtx.Logger.Debug("image already available", "image", imageURL.String())
 	}
 
+	entrypoint, cmd := ParseInterpreterCommand(d.Entrypoint, command.GetShellCommands())
+
 	config := &container.Config{
 		Image:      imageURL.String(),
-		Entrypoint: strings.Split(d.Entrypoint, " "),
-		Cmd:        command.GetShellCommands(),
+		Entrypoint: []string{entrypoint},
+		Cmd:        cmd,
 		WorkingDir: dockerWorkingDir,
 		Tty:        true,
+		Env:        execCtx.EnvVars.EnvStrings(),
 	}
 	hostConfig := &container.HostConfig{
 		Mounts: []mount.Mount{
@@ -172,11 +144,42 @@ searchimages:
 		return err
 	}
 
-	streamContainerLogs(ctx, mobyClient, dockerContainer.ID, execCtx.Logger)
-	waitChan, errChan := mobyClient.ContainerWait(ctx, dockerContainer.ID, container.WaitConditionNotRunning)
+	logReader, err := mobyClient.ContainerLogs(ctx, dockerContainer.ID, types.ContainerLogsOptions{
+		ShowStdout: true,
+		ShowStderr: true,
+	})
+	if err != nil {
+		return err
+	}
+	defer logReader.Close()
 
+	reader := bufio.NewReader(logReader)
+	for {
+		line, err := reader.ReadBytes('\n')
+
+		lineStr := string(bytes.TrimRight(line, "\n\r"))
+		execCtx.Logger.Info(lineStr)
+		if err != nil {
+			if err != io.EOF {
+				execCtx.Logger.Error(fmt.Sprintf("error streaming logs from container: %s", err))
+				return err
+			}
+			break
+		}
+	}
+
+	waitChan, errChan := mobyClient.ContainerWait(ctx, dockerContainer.ID, container.WaitConditionNotRunning)
 	select {
-	case <-waitChan:
+	case wait := <-waitChan:
+		err := wait.Error
+		if err != nil {
+			return fmt.Errorf("error running container: %s", err)
+		}
+
+		statusCode := wait.StatusCode
+		if statusCode != 0 {
+			return fmt.Errorf("container returned non-zero exit code: %d", statusCode)
+		}
 	case err := <-errChan:
 		return err
 	}

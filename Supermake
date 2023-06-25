@@ -40,11 +40,32 @@ anotherhelp: anotherhelp2
 	echo testing!!!
 
 anotherhelp2:
-	echo 'testing123...'
+	echo "Hello from local shell $NAMESPACE"
+
+	@local python3 -c
+	import os
+	print("Hello from local python", os.environ["NAMESPACE"])
+
+	@alpine:3 sh -c
+	echo "Hello from docker shell $NAMESPACE"
+	echo 'docker shell' > test-docker-sh.txt
+
+	@python:3 python -c
+	import os
+	print("Hello from docker python", os.environ["NAMESPACE"])
+	open("test-docker-python.txt", "w+").write("docker python")
+
+	@alpine:3 sh -c
+	echo "hello $NAMESPACE!"
 
 	test_a: test_b
-		echo "test A"
+		echo "test_a is running!"
+		echo "test_a done"
 
 	test_b:
-		echo "test B"
-		echo "done"
+		echo "test_b is running!"
+		echo "test_b done"
+
+	test_c:
+		echo "test_c is running!"
+		echo "test_c done"

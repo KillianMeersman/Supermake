@@ -10,8 +10,6 @@ import (
 	"strings"
 
 	"github.com/KillianMeersman/Supermake/pkg/supermake"
-	"github.com/KillianMeersman/Supermake/pkg/supermake/executables"
-	"github.com/KillianMeersman/Supermake/pkg/supermake/executors"
 	"github.com/KillianMeersman/Supermake/pkg/supermake/util"
 )
 
@@ -79,8 +77,8 @@ func (p *SuperMakeFileParser) parseGlobalVariables() (map[string]*supermake.Vari
 	return variables, nil
 }
 
-func (p *SuperMakeFileParser) parseTargets(variables map[string]*supermake.Variable) (map[string]executors.Runable, error) {
-	targets := make(map[string]executors.Runable)
+func (p *SuperMakeFileParser) parseTargets(variables map[string]*supermake.Variable) (map[string]supermake.Runable, error) {
+	targets := make(map[string]supermake.Runable)
 
 	for i := 0; i < len(p.lines); i++ {
 		line := p.lines[i]
@@ -213,9 +211,9 @@ func parseTarget(lines []string, indentationLevels []int, variables map[string]*
 	subTargets := make(map[string]*supermake.Target)
 
 	// Steps & executors
-	steps := make([]executors.Runable, 0)
-	currentCommands := make([]executables.Command, 0)
-	var currentExecutor executors.CommandExecutor = executors.NewLocalEnvironment()
+	steps := make([]supermake.Runable, 0)
+	currentCommands := make([]supermake.Command, 0)
+	var currentExecutor supermake.CommandExecutor = supermake.NewLocalEnvironment()
 
 	for i := 1; i < len(lines); i++ {
 		line := lines[i]
@@ -238,8 +236,8 @@ func parseTarget(lines []string, indentationLevels []int, variables map[string]*
 					Steps:       currentCommands,
 				})
 			}
-			currentCommands = make([]executables.Command, 0)
-			currentExecutor = executors.NewLocalEnvironment()
+			currentCommands = make([]supermake.Command, 0)
+			currentExecutor = supermake.NewLocalEnvironment()
 			steps = append(steps, subTarget)
 			i = blockEnd - 1
 			// Executors
@@ -255,14 +253,25 @@ func parseTarget(lines []string, indentationLevels []int, variables map[string]*
 			groups := executorRegex.FindStringSubmatch(line)
 
 			// Reset commands & executor
-			currentCommands = make([]executables.Command, 0)
-			currentExecutor = &executors.DockerEnvironment{
-				Image:      strings.TrimSpace(groups[1]),
-				Entrypoint: strings.TrimSpace(groups[2]),
+			currentCommands = make([]supermake.Command, 0)
+
+			image := strings.TrimSpace(groups[1])
+			entrypoint := strings.Split(strings.TrimSpace(groups[2]), " ")
+
+			if image == "local" {
+				currentExecutor = &supermake.LocalEnvironment{
+					Entrypoint: entrypoint,
+				}
+			} else {
+				currentExecutor = &supermake.DockerEnvironment{
+					Image:      image,
+					Entrypoint: entrypoint,
+				}
 			}
+
 		} else {
 			// Commands
-			command := &executables.ShellCommand{
+			command := &supermake.ShellCommand{
 				Command: line,
 			}
 			currentCommands = append(currentCommands, command)

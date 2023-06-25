@@ -4,23 +4,21 @@ import (
 	"context"
 	"fmt"
 	"sync"
-
-	"github.com/KillianMeersman/Supermake/pkg/supermake/executors"
 )
 
 type Target struct {
 	name         string
 	Node         string
 	Dependencies []string
-	Steps        []executors.Runable
-	Variables    map[string]*Variable
+	Steps        []Runable
+	Variables    Variables
 	SubTargets   map[string]*Target
 	Parent       *Target
 	lock         *sync.Mutex
 	done         bool
 }
 
-func NewTarget(name, node string, dependencies []string, steps []executors.Runable, Variables map[string]*Variable, subTargets map[string]*Target, Parent *Target) *Target {
+func NewTarget(name, node string, dependencies []string, steps []Runable, Variables Variables, subTargets map[string]*Target, Parent *Target) *Target {
 	return &Target{
 		name:         name,
 		Dependencies: dependencies,
@@ -34,7 +32,7 @@ func NewTarget(name, node string, dependencies []string, steps []executors.Runab
 }
 
 // Run the target's dependencies
-func (t *Target) runDependencies(ctx context.Context, execCtx executors.ExecutorContext, targets map[string]executors.Runable) error {
+func (t *Target) runDependencies(ctx context.Context, execCtx ExecutorContext, targets map[string]Runable) error {
 	errChan := make(chan error)
 	doneChan := make(chan struct{})
 	wg := new(sync.WaitGroup)
@@ -87,7 +85,7 @@ func (t *Target) Name() string {
 	return t.name
 }
 
-func (t *Target) Run(ctx context.Context, execCtx executors.ExecutorContext) error {
+func (t *Target) Run(ctx context.Context, execCtx ExecutorContext) error {
 	t.lock.Lock()
 	defer t.lock.Unlock()
 
@@ -101,7 +99,7 @@ func (t *Target) Run(ctx context.Context, execCtx executors.ExecutorContext) err
 
 	logger.Debug("running target")
 
-	targetsWithSubtargets := make(map[string]executors.Runable)
+	targetsWithSubtargets := make(map[string]Runable)
 	for k, v := range execCtx.Targets {
 		targetsWithSubtargets[k] = v
 	}
@@ -120,6 +118,7 @@ func (t *Target) Run(ctx context.Context, execCtx executors.ExecutorContext) err
 	for _, step := range t.Steps {
 		err := step.Run(ctx, execCtx)
 		if err != nil {
+			logger.Fatal(err.Error())
 			return err
 		}
 	}

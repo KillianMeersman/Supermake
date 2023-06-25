@@ -1,4 +1,4 @@
-package executables
+package supermake
 
 type ShellCommand struct {
 	Command string

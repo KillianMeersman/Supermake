@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"os"
@@ -22,7 +23,7 @@ var rootCmd = &cobra.Command{
 		}
 
 		for _, target := range args {
-			err = file.Run(target)
+			err = file.Run(context.Background(), target)
 			if err != nil {
 				log.Fatal(err)
 			}
