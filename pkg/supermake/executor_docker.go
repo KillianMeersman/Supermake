@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"strings"
 
 	"github.com/docker/docker/api/types"
@@ -31,24 +32,27 @@ func parseImageURL(url string) (*imageURL, error) {
 	parts := strings.Split(url, "/")
 
 	registry := "docker.io"
-	name := strings.Join(parts, "/")
+	path := parts
 	if len(parts) > 1 {
 		if strings.Contains(parts[0], ".") {
 			registry = parts[0]
-			name = strings.Join(parts[1:], "/")
+			path = parts[1:]
 		}
+	} else {
+		path = []string{"library"}
+		path = append(path, parts...)
 	}
 
 	tag := "latest"
-	parts = strings.SplitN(parts[len(parts)-1], ":", 2)
+	parts = strings.SplitN(path[len(path)-1], ":", 2)
 	if len(parts) > 1 {
 		tag = parts[1]
-		name = strings.TrimSuffix(name, fmt.Sprintf(":%s", tag))
+		path[len(path)-1] = parts[0]
 	}
 
 	return &imageURL{
 		Registry: registry,
-		Name:     name,
+		Name:     strings.Join(path, "/"),
 		Tag:      tag,
 	}, nil
 }
@@ -95,12 +99,10 @@ searchimages:
 		if err != nil {
 			return err
 		}
-		// data, err := ioutil.ReadAll(output)
-		// if err != nil {
-		// 	return err
-		// }
-
-		// fmt.Print(string(data))
+		_, err = ioutil.ReadAll(output)
+		if err != nil {
+			return err
+		}
 
 		defer output.Close()
 	} else {
