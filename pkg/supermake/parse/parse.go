@@ -14,7 +14,7 @@ import (
 )
 
 var targetRegex = regexp.MustCompile(`^([a-zA-Z0-9-/_.@]+):(?: +(.*))?$`)
-var executorRegex = regexp.MustCompile(`^\t*@([a-zA-Z0-9-_:.]+)( .*)?$`)
+var executorRegex = regexp.MustCompile(`^([a-zA-Z0-9]*?)@([a-zA-Z0-9-_:.]+)( .*)?$`)
 var variableDeclarationRegex = regexp.MustCompile(`^(export +)?(\w+) +(=|:=|\?=) +(.*)$`)
 
 const COMMENT_CHARS = "#"
@@ -200,20 +200,26 @@ func getNestedTargetName(parent string, name string) string {
 }
 
 // Parse a command block, optionally starting with an executor.
-func (p *SuperMakeFileParser) parseCommandBlock(variables supermake.Variables) (supermake.CommandExecutor, supermake.Command, error) {
+func (p *SuperMakeFileParser) parseCommandBlock(variables supermake.Variables, defaultName string) (supermake.CommandExecutor, supermake.Command, string, error) {
 	var executor supermake.CommandExecutor = supermake.NewLocalEnvironment()
 	commands := make(supermake.CommandGroup, 0, 10)
+
+	name := defaultName
 
 	// Parse custom executor if required
 	if p.lineTypes[p.i] == EXECUTOR {
 		line, err := evaluateVariables(p.lines[p.i], variables)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, defaultName, err
 		}
 		groups := executorRegex.FindStringSubmatch(line)
 
-		image := strings.TrimSpace(groups[1])
-		entrypoint := strings.Split(strings.TrimSpace(groups[2]), " ")
+		if groups[1] != "" {
+			name = groups[1]
+		}
+
+		image := strings.TrimSpace(groups[2])
+		entrypoint := strings.Split(strings.TrimSpace(groups[3]), " ")
 
 		if image == "local" {
 			executor = &supermake.LocalEnvironment{
@@ -235,12 +241,12 @@ func (p *SuperMakeFileParser) parseCommandBlock(variables supermake.Variables) (
 
 		line, err := evaluateVariables(p.lines[p.i], variables)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, name, err
 		}
 		commands = append(commands, line)
 	}
 
-	return executor, commands, nil
+	return executor, commands, name, nil
 }
 
 // Parse a target.
@@ -294,12 +300,12 @@ func (p *SuperMakeFileParser) parseTarget(variables supermake.Variables, targets
 			dependencies = append(dependencies, blockDependencies...)
 			blockDependencies = make([]string, 0)
 
-			executor, commands, err := p.parseCommandBlock(variables)
+			executor, commands, blockName, err := p.parseCommandBlock(variables, fmt.Sprintf("%d", step))
 			if err != nil {
 				return nil, err
 			}
 
-			target := supermake.NewTarget(fmt.Sprintf("%s::%d", name, step), node, []string{}, executor, []supermake.Command{commands}, variables)
+			target := supermake.NewTarget(fmt.Sprintf("%s::%s", name, blockName), node, []string{}, executor, []supermake.Command{commands}, variables)
 			target.Dependencies = append(target.Dependencies, dependencies...)
 			targets[target.FQN()] = target
 			dependencies = append(dependencies, target.FQN())
