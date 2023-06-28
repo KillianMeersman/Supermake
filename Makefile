@@ -1,9 +1,13 @@
 run: build
 	./supermake help
 
-build:
+build: test
+	go mod tidy
 	go generate ./...
 	go build -o supermake
+
+test:
+	go test -v ./...
 
 install: build
 	sudo cp -f supermake /usr/local/bin/supermake

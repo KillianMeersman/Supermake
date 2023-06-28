@@ -412,6 +412,10 @@ func ParseSupermakeFileV2(path string) (*supermake.SupermakeFile, error) {
 	}
 
 	data := string(dataBytes)
+	return ParseSupermakeString(data)
+}
+
+func ParseSupermakeString(data string) (*supermake.SupermakeFile, error) {
 	lines := util.SplitLines(data)
 
 	parser := NewParser(lines)
