@@ -47,7 +47,7 @@ func ShellColoredLevels(level LogLevel, message string, fields map[string]string
 		levelFormatting = []ShellFormatting{FgHiMagenta, Bold}
 	}
 
-	return []byte(TabulateRow().Field(levelStr, 9, levelFormatting...).Field(target, 15).Field("|", 1).Field(message, -1).Field(fieldString, -1).String())
+	return []byte(TabulateRow().Field(levelStr, 9, levelFormatting...).Field(target, 25).Field("|", 1).Field(message, -1).Field(fieldString, -1).String())
 }
 
 type Logger struct {
