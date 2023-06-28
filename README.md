@@ -1,45 +1,55 @@
 # Supermake
-
+## Description
 Supermake is a superset of Makefiles that serves as a modern CI pipeline. Supermake can be ran locally as well as on remote CI server(s).
 
-Features:
-1. Nested targets & automatic parallelisation.
-2. Easy-to-use containerization of steps.
-3. Compatibility with existing Makefiles.
+**Features**:
+1. Automatic parallelisation.
+2. Nested targets.
+3. Easy containerization of steps.
+4. Compatible with most existing Makefiles.
 
 ## User guide
-This user guide will guide you through the Supermake featureset by starting with an existing makefile, then improving it step-by-step.
+This user guide will guide you through the Supermake featureset by starting with an simple, existing makefile. We'll improve it by adding Supermake features.
 
-Target dependencies can be expressed in the usual Makefile form.
+Supermake uses the target syntax you're already familiar with, our Makefile starts off as:
 
 ```Makefile
 build: test
 	docker build -t myimage .
 
 test:
-	python manage.py test
+	pytest -x tests/
 	echo 'All tests passed :)'
 ```
 
-### Using containers
-It can be useful to run certain steps inside a Docker container. This can be achieved by using the following notation on its own line:
+### Using environments
+It can be useful to run certain steps inside a certain shell, interpreter or container. This can be achieved by using the following notation on its own line:
 
 ```
-@image:[tag] [entrypoint]
+[name]@image:[tag] [entrypoint]
+```
+or
+```
+[name]@local [entrypoint]
 ```
 
-These are called environments. All following steps, up until another environment or the end of the target, will be ran inside this container.
+All following steps, up until another environment or the end of the target, will be ran in this shell or environment. They can be given a custom name, so as to make it easier to follow logs.
 
-When a container is started, the working directory is copied over into the container's working directory. After the container-specific steps are done, all files are copied out of the container's working directory and back into the original directory. This way, users need not fiddle with manual extraction of files.
+**Using containers**
 
-The `@local` keyword tells Supermake to go back to an uncontainerized shell. All commands use this environment by default.
+When a container is started, the working directory is mounted into the container's working directory. This way, you do not need to fiddle with manual extraction of files.
 
-```Supermake
+**Using local shell**
+
+The `@local` keyword tells Supermake to go back to an uncontainerized shell, optionally with a custom entrypoint. All commands use this environment by default, with "sh -ce" as the entrypoint.
+
+Let's augment our Makefile with environments.
+```Makefile
 build: test
 	docker build -t myimage .
 
 test:
-	@python:3.11 bash
+	@python:3 bash
 	python manage.py test
 
 	@local
@@ -48,10 +58,12 @@ test:
 
 
 ### Subtargets and parallelisation
-One issue with traditional Makefiles is the target graph runs in series. Often leading to situations where they can't be used in CI pipelines as-is, as some steps need parallelism for it to reach acceptable speeds.
+One issue with traditional Makefiles is the lack of built-in parallel processing. Often leading to situations where they can't be used in CI pipelines as-is, as some steps need parallelism for it to reach acceptable speeds.
 
-Supermake targets can be nested, allowing them to run in parallel automatically. Nested targets can also be used in conjunction with other steps.
-```Supermake
+Supermake targets run in parallel whenever possible. They may also be nested to increase readability; Nested targets can also be used in conjunction with other steps.
+
+Let's speed up our testing step by splitting it up into three parallel testing runs. As an example, we will make `test_c` wait on `test_a` before starting.
+```Makefile
 build: test
 	docker build -t myimage .
 
@@ -60,26 +72,36 @@ test:
 
 	test_a:
 		@python:3.11
-		python manage.py test a
+		pytest -x tests/a/
 
 	test_b:
 		@python:3.11
-		python manage.py test b
+		pytest -x tests/b/
+
+	test_c: test_a
+		@python:3.11
+		pytest -x tests/c/
 
 	echo 'All tests passed :)'
 ```
 
-In this case, test will run all steps normally until it encounters test_a, it then check for other nested targets directly following test_a and runs them all in parallel.
+In this example, the `test` target will run steps normally until it encounters `test_a`, `test_b` and `test_c`, which it will run in parallel (waiting for test_a before running test_c). It will wait for all consecutive subtargets before evaluating the next step, or exiting the target.
 
-Supermake will wait until all running nested targets have completed before evaluating the next step, or exiting the target.
+It is possible to run subtargets by using `supermake test::test_a`. Subtargets can be nested as deep as you want, though this is discouraged.
 
-It is possible to run subtargets by using `supermake test.test_a`. Subtargets can be nested up to three levels deep, though this is discouraged.
+### Distributed pipelines & runner selectors
+When using distributed pipelines, targets can be ran on specific runners via an environment-like directive on the target line. It takes the following form:
 
-### Multi-node pipelines
-Targets can be ran on specific nodes via an environment-like directive on directly after the target name, a la email..
+```
+[name]@[node]: [dependencies...]
+```
 
-```Supermake
-build@linux: test
+When runners are registered, they are given a name depending on their os & capabilities. Many runners can share the same name, if they share the same OS & capabilities. It is up to the runner provider to establish a naming scheme.
+
+Let's make sure our build step only runs on linux runners with the docker driver installed. In our example, this takes the form of `debian-docker`, which should be fairly self-explanatory.
+
+```Makefile
+build@debian-docker: test
 	docker build -t myimage .
 
 test:
@@ -95,6 +117,3 @@ test:
 
 	echo 'All tests passed :)'
 ```
-
-
-### Node groups
