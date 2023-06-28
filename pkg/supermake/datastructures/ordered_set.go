@@ -36,6 +36,15 @@ func (s OrderedSet[T]) Remove(e T) {
 	s.elemSlice[index] = nil
 }
 
+func (s OrderedSet[T]) Pop() *T {
+	for i := len(s.elemSlice) - 1; i >= 0; i-- {
+		if s.elemSlice[i] != nil {
+			return s.elemSlice[i]
+		}
+	}
+	return nil
+}
+
 func (s OrderedSet[T]) Contains(e T) bool {
 	_, ok := s.elemMap[e]
 	return ok

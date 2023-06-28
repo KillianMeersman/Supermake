@@ -33,11 +33,12 @@ func NewTarget(name, node string, dependencies []string, executor CommandExecuto
 	}
 }
 
-// Run the target's dependencies
+// Run the target's dependencies in parallel.
 func (t *Target) runDependencies(ctx context.Context, execCtx ExecutorContext) error {
 	errChan := make(chan error)
 	doneChan := make(chan struct{})
 	wg := new(sync.WaitGroup)
+	wg.Add(len(t.Dependencies))
 
 	subTargetCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -53,8 +54,6 @@ func (t *Target) runDependencies(ctx context.Context, execCtx ExecutorContext) e
 				return fmt.Errorf("target dependency loop %s -> %s", t.name, subTargetName)
 			}
 		}
-
-		wg.Add(1)
 
 		// execCtx.Logger.Debug("running dependency target", "dependency", dependencyTarget.FQN())
 		go func() {

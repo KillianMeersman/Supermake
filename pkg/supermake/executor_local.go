@@ -20,7 +20,7 @@ func NewLocalEnvironment() *LocalEnvironment {
 
 // Start an interpreter and feed commands into stdin, logs stdout and stderr to the logger as INFO level logs.
 func startAndStreamOutput(ctx context.Context, command string, args []string, vars Variables, logger *log.Logger) error {
-	cmd := exec.Command(command, args...)
+	cmd := exec.CommandContext(ctx, command, args...)
 
 	cmd.Env = append(cmd.Env, vars.EnvStrings()...)
 
