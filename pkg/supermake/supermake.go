@@ -9,7 +9,7 @@ import (
 )
 
 type SupermakeFile struct {
-	Targets   map[string]Runable
+	Targets   Targets
 	Variables Variables
 }
 
@@ -25,6 +25,12 @@ func (s *SupermakeFile) Run(ctx context.Context, target string) error {
 	}
 
 	logger := log.NewLogger(log.TRACE, log.ShellColoredLevels, os.Stdout, os.Stderr)
+
+	logger.Debug("VARIABLES:")
+	for k, v := range t.Variables {
+		logger.Debug(fmt.Sprintf("%s = %s", k, v.Value()))
+	}
+
 	err = t.Run(ctx, ExecutorContext{
 		EnvVars:       s.Variables,
 		Targets:       s.Targets,

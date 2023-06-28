@@ -3,36 +3,38 @@ package supermake
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 )
+
+type Targets map[string]*Target
 
 type Target struct {
 	name         string
 	Node         string
 	Dependencies []string
-	Steps        []Runable
 	Variables    Variables
-	SubTargets   map[string]*Target
-	Parent       *Target
+	Executor     CommandExecutor
+	Steps        []Command
 	lock         *sync.Mutex
 	done         bool
 }
 
-func NewTarget(name, node string, dependencies []string, steps []Runable, Variables Variables, subTargets map[string]*Target, Parent *Target) *Target {
+func NewTarget(name, node string, dependencies []string, executor CommandExecutor, steps []Command, variables Variables) *Target {
 	return &Target{
 		name:         name,
 		Dependencies: dependencies,
 		Node:         node,
+		Executor:     executor,
 		Steps:        steps,
-		SubTargets:   subTargets,
-		Parent:       nil,
+		Variables:    variables,
 		lock:         &sync.Mutex{},
 		done:         false,
 	}
 }
 
 // Run the target's dependencies
-func (t *Target) runDependencies(ctx context.Context, execCtx ExecutorContext, targets map[string]Runable) error {
+func (t *Target) runDependencies(ctx context.Context, execCtx ExecutorContext) error {
 	errChan := make(chan error)
 	doneChan := make(chan struct{})
 	wg := new(sync.WaitGroup)
@@ -41,7 +43,7 @@ func (t *Target) runDependencies(ctx context.Context, execCtx ExecutorContext, t
 	defer cancel()
 
 	for _, subTargetName := range t.Dependencies {
-		dependencyTarget, ok := targets[subTargetName]
+		dependencyTarget, ok := execCtx.Targets[subTargetName]
 		if !ok {
 			return fmt.Errorf("unknown dependency target '%s'", subTargetName)
 		}
@@ -54,7 +56,7 @@ func (t *Target) runDependencies(ctx context.Context, execCtx ExecutorContext, t
 
 		wg.Add(1)
 
-		execCtx.Logger.Debug("running dependency target", "dependency", dependencyTarget.Name())
+		// execCtx.Logger.Debug("running dependency target", "dependency", dependencyTarget.FQN())
 		go func() {
 			defer wg.Done()
 			err := dependencyTarget.Run(subTargetCtx, execCtx)
@@ -82,6 +84,12 @@ func (t *Target) Reset() {
 }
 
 func (t *Target) Name() string {
+	parts := strings.Split(t.name, "::")
+	return parts[len(parts)-1]
+
+}
+
+func (t *Target) FQN() string {
 	return t.name
 }
 
@@ -92,36 +100,25 @@ func (t *Target) Run(ctx context.Context, execCtx ExecutorContext) error {
 	if t.done {
 		return nil
 	}
-	t.done = true
 
-	logger := execCtx.Logger.With("target", t.Name())
+	logger := execCtx.Logger.With("target", t.FQN())
 	execCtx.Logger = logger
 
-	logger.Debug("running target")
-
-	targetsWithSubtargets := make(map[string]Runable)
-	for k, v := range execCtx.Targets {
-		targetsWithSubtargets[k] = v
-	}
-	for k, v := range t.SubTargets {
-		targetsWithSubtargets[k] = v
-	}
-
-	execCtx.Targets = targetsWithSubtargets
-	execCtx.ParentTargets[t.name] = t
-
-	err := t.runDependencies(ctx, execCtx, targetsWithSubtargets)
+	err := t.runDependencies(ctx, execCtx)
 	if err != nil {
 		return err
 	}
 
+	logger.Debug("running target")
+
 	for _, step := range t.Steps {
-		err := step.Run(ctx, execCtx)
+		err := t.Executor.Execute(ctx, execCtx, step)
 		if err != nil {
 			logger.Fatal(err.Error())
 			return err
 		}
 	}
 
+	t.done = true
 	return nil
 }

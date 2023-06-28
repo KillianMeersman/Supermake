@@ -29,7 +29,7 @@ type Runable interface {
 
 type ExecutorContext struct {
 	EnvVars       Variables
-	Targets       map[string]Runable
+	Targets       Targets
 	ParentTargets map[string]Runable
 	WorkingDir    string
 	Logger        *log.Logger
