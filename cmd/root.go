@@ -11,6 +11,7 @@ import (
 )
 
 var file string = "./Supermake"
+var skipTargets []string = []string{}
 
 var rootCmd = &cobra.Command{
 	Use:   "supermake target [target...]",
@@ -20,6 +21,12 @@ var rootCmd = &cobra.Command{
 		file, err := parse.ParseSupermakeFileV2(file)
 		if err != nil {
 			log.Fatal(err)
+		}
+
+		for _, skip := range skipTargets {
+			if target, ok := file.Targets[skip]; ok {
+				target.Done()
+			}
 		}
 
 		for _, target := range args {
@@ -32,7 +39,8 @@ var rootCmd = &cobra.Command{
 }
 
 func init() {
-	rootCmd.PersistentFlags().StringVar(&file, "file", "./Supermake", "Supermake file to use")
+	rootCmd.PersistentFlags().StringVarP(&file, "file", "f", "./Supermake", "Supermake file to use")
+	rootCmd.PersistentFlags().StringArrayVarP(&skipTargets, "outdated", "o", []string{}, "Targets to skip")
 }
 
 func Execute() {

@@ -13,6 +13,12 @@ type SupermakeFile struct {
 	Variables Variables
 }
 
+func (s *SupermakeFile) Reset() {
+	for _, target := range s.Targets {
+		target.Reset()
+	}
+}
+
 func (s *SupermakeFile) Run(ctx context.Context, target string) error {
 	t, ok := s.Targets[target]
 	if !ok {

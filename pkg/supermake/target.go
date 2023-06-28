@@ -79,10 +79,6 @@ func (t *Target) runDependencies(ctx context.Context, execCtx ExecutorContext) e
 	}
 }
 
-func (t *Target) Reset() {
-	t.done = false
-}
-
 func (t *Target) Name() string {
 	parts := strings.Split(t.name, "::")
 	return parts[len(parts)-1]
@@ -91,6 +87,18 @@ func (t *Target) Name() string {
 
 func (t *Target) FQN() string {
 	return t.name
+}
+
+func (t *Target) Done() {
+	t.lock.Lock()
+	defer t.lock.Unlock()
+	t.done = true
+}
+
+func (t *Target) Reset() {
+	t.lock.Lock()
+	defer t.lock.Unlock()
+	t.done = false
 }
 
 func (t *Target) Run(ctx context.Context, execCtx ExecutorContext) error {
