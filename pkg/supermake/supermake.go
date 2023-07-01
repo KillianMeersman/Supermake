@@ -37,14 +37,16 @@ func (s *SupermakeFile) Run(ctx context.Context, target string) error {
 		logger.Debug(fmt.Sprintf("%s = %s", k, v.Value()))
 	}
 
-	err = t.Run(ctx, ExecutorContext{
+	scheduler := &LocalScheduler{}
+	execCtx := ExecutorContext{
 		EnvVars:       s.Variables,
 		Targets:       s.Targets,
 		ParentTargets: make(map[string]Runable),
 		WorkingDir:    cwd,
 		Logger:        logger,
-	})
-
+		Scheduler:     scheduler,
+	}
+	err = scheduler.ScheduleTarget(ctx, execCtx, t)
 	if err != nil {
 		logger.Fatal(err.Error())
 	}

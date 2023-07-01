@@ -58,7 +58,7 @@ func (t *Target) runDependencies(ctx context.Context, execCtx ExecutorContext) e
 		// execCtx.Logger.Debug("running dependency target", "dependency", dependencyTarget.FQN())
 		go func() {
 			defer wg.Done()
-			err := dependencyTarget.Run(subTargetCtx, execCtx)
+			err := execCtx.Scheduler.ScheduleTarget(subTargetCtx, execCtx, dependencyTarget)
 			if err != nil {
 				errChan <- err
 			}

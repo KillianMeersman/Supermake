@@ -33,4 +33,5 @@ type ExecutorContext struct {
 	ParentTargets map[string]Runable
 	WorkingDir    string
 	Logger        *log.Logger
+	Scheduler     Scheduler
 }
