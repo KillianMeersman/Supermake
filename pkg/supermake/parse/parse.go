@@ -3,7 +3,6 @@ package parse
 import (
 	"bytes"
 	"fmt"
-	"log"
 	"os"
 	"os/exec"
 	"regexp"
@@ -54,10 +53,17 @@ func (p *SuperMakeFileParser) cleanAndMapLines() {
 
 	// build indentation level map
 	for i, line := range p.rawLines {
-		line, indentation, err := countAndRemoveIndentation(line)
-		if err != nil {
-			log.Fatal(err)
+		indentation := IndentLevel(line)
+		if indentation == -1 {
+			panic("invalid indentation")
 		}
+
+		firstChar := FirstNonWhitespaceIndex(line)
+		if firstChar == -1 {
+			firstChar = 0
+		}
+
+		line := line[firstChar:]
 
 		line = stripTrailingComment(line)
 		line = strings.TrimSpace(line)
@@ -151,37 +157,34 @@ func findIndentedBlockEnd(indent []int, index int) int {
 
 // Get the index of the first non-whitespace character.
 // Returns -1 if the line is empty or all whitespace.
-func FirstCharacter(line string) int {
+func FirstNonWhitespaceIndex(line string) int {
 	return strings.IndexFunc(line, func(r rune) bool {
 		return r != ' ' && r != '\t'
 	})
 }
 
-func countAndRemoveIndentation(line string) (string, int, error) {
+func IndentLevel(line string) int {
 	spaceCounter := 0
-	indentation := 0
+	indentLevel := 0
 
-	i := 0
 	for _, char := range line {
 		if char == ' ' {
 			spaceCounter++
+
+			if spaceCounter == 4 {
+				indentLevel++
+				spaceCounter = 0
+			}
 		} else if char == '\t' {
-			indentation++
+			indentLevel++
+		} else if spaceCounter > 0 && spaceCounter < 4 {
+			return -1
 		} else {
 			break
 		}
-
-		if spaceCounter == 4 {
-			indentation++
-			spaceCounter = 0
-		} else if spaceCounter > 0 && spaceCounter < 4 {
-			return "", -1, fmt.Errorf("invalid indentation for line '%s'", line)
-		}
-
-		i++
 	}
 
-	return line[i:], indentation, nil
+	return indentLevel
 }
 
 func stripTrailingComment(line string) string {

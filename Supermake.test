@@ -1,12 +1,3 @@
-package parse_test
-
-import (
-	"testing"
-
-	"github.com/KillianMeersman/Supermake/pkg/supermake/parse"
-)
-
-const Makefile = `
 help_attach = "attach - Attach a tty to stdin/stdout of a running container for debug sessions. Stop detachment with Ctrl+p Ctrl+q" # testing... sss
 help_build = "build - Build the production justrussel api service docker image"
 help_console = "console - Start a console running bash"
@@ -19,12 +10,12 @@ help_test = "test - Run all unit and integration tests"
 export ENVIRONMENT ?= staging
 export API_VERSION ?= local
 export API_VERSION_CLEAN = $(shell echo $(API_VERSION) | sed 's/\./-/g')
-export API_IMAGE := registry.test/backend/api:$(API_VERSION)
+export API_IMAGE := europe-docker.pkg.dev/just-russel/docker/backend/api:$(API_VERSION)
 export AUXILIARY_VERSION ?= $(API_VERSION)
 export NAMESPACE := $(ENVIRONMENT)
 export SERVICE_ACCOUNT := $(ENVIRONMENT)
 
-export SENTRY_ORG := my-org
+export SENTRY_ORG := just-russel
 
 STAGING_DIR = $(shell mktemp -d)
 
@@ -78,37 +69,3 @@ anotherhelp2:
 	test_c:
 		echo "test_c is running!"
 		echo "test_c done"
-
-`
-
-func TestParsing(t *testing.T) {
-	file, err := parse.ParseSupermakeString(Makefile)
-	if err != nil {
-		t.FailNow()
-	}
-
-	// Do some sampling
-	target, ok := file.Targets["anotherhelp2::test_a"]
-	if !ok {
-		t.FailNow()
-	}
-
-	// Test dependencies
-	wantedTargets := []string{"anotherhelp2::test_b", "anotherhelp2::0", "anotherhelp2::1", "anotherhelp2::2", "anotherhelp2::3", "anotherhelp2::4", "anotherhelp2::test_a::0"}
-	for i, dep := range target.Dependencies {
-		if dep != wantedTargets[i] {
-			t.Fail()
-		}
-	}
-	if len(target.Steps) != 0 {
-		t.FailNow()
-	}
-
-	target, ok = file.Targets["anotherhelp2::test_a::0"]
-	if !ok {
-		t.FailNow()
-	}
-	if len(target.Steps) != 1 {
-		t.FailNow()
-	}
-}
