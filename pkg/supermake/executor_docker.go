@@ -1,14 +1,12 @@
 package supermake
 
 import (
-	"bufio"
-	"bytes"
 	"context"
 	"fmt"
-	"io"
 	"io/ioutil"
 	"strings"
 
+	"github.com/KillianMeersman/Supermake/pkg/supermake/log"
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/mount"
@@ -146,29 +144,16 @@ searchimages:
 		return err
 	}
 
-	logReader, err := mobyClient.ContainerLogs(ctx, dockerContainer.ID, types.ContainerLogsOptions{
+	logs, err := mobyClient.ContainerLogs(ctx, dockerContainer.ID, types.ContainerLogsOptions{
 		ShowStdout: true,
 		ShowStderr: true,
 	})
 	if err != nil {
 		return err
 	}
-	defer logReader.Close()
+	defer logs.Close()
 
-	reader := bufio.NewReader(logReader)
-	for {
-		line, err := reader.ReadBytes('\n')
-
-		lineStr := string(bytes.TrimRight(line, "\n\r"))
-		execCtx.Logger.Info(lineStr)
-		if err != nil {
-			if err != io.EOF {
-				execCtx.Logger.Error(fmt.Sprintf("error streaming logs from container: %s", err))
-				return err
-			}
-			break
-		}
-	}
+	log.StreamReaderNewLines(execCtx.Logger, logs)
 
 	waitChan, errChan := mobyClient.ContainerWait(ctx, dockerContainer.ID, container.WaitConditionNotRunning)
 	select {

@@ -1,7 +1,6 @@
 package supermake
 
 import (
-	"bufio"
 	"context"
 	"os/exec"
 	"sync"
@@ -45,20 +44,12 @@ func startAndStreamOutput(ctx context.Context, command string, args []string, va
 	wg.Add(2)
 
 	go func() {
-		scanner := bufio.NewScanner(stdout)
-		for scanner.Scan() {
-			m := scanner.Text()
-			logger.Info(m)
-		}
+		log.StreamReaderNewLines(logger, stdout)
 		wg.Done()
 	}()
 
 	go func() {
-		scanner := bufio.NewScanner(stderr)
-		for scanner.Scan() {
-			m := scanner.Text()
-			logger.Info(m)
-		}
+		log.StreamReaderNewLines(logger, stderr)
 		wg.Done()
 	}()
 
