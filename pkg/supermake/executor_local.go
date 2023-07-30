@@ -1,9 +1,10 @@
 package supermake
 
 import (
-	"bytes"
+	"bufio"
 	"context"
 	"os/exec"
+	"sync"
 
 	"github.com/KillianMeersman/Supermake/pkg/supermake/log"
 )
@@ -22,12 +23,47 @@ func NewLocalEnvironment() *LocalEnvironment {
 func startAndStreamOutput(ctx context.Context, command string, args []string, vars Variables, logger *log.Logger) error {
 	cmd := exec.CommandContext(ctx, command, args...)
 
+	// Set env
 	cmd.Env = append(cmd.Env, vars.EnvStringsInherited()...)
 
-	output, err := cmd.CombinedOutput()
-	output = bytes.TrimRight(output, "\n\r")
-	logger.Info(string(output))
-	return err
+	// Stream output
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return err
+	}
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		return err
+	}
+
+	err = cmd.Start()
+	if err != nil {
+		return err
+	}
+
+	wg := sync.WaitGroup{}
+	wg.Add(2)
+
+	go func() {
+		scanner := bufio.NewScanner(stdout)
+		for scanner.Scan() {
+			m := scanner.Text()
+			logger.Info(m)
+		}
+		wg.Done()
+	}()
+
+	go func() {
+		scanner := bufio.NewScanner(stderr)
+		for scanner.Scan() {
+			m := scanner.Text()
+			logger.Info(m)
+		}
+		wg.Done()
+	}()
+
+	wg.Wait()
+	return cmd.Wait()
 }
 
 func (l *LocalEnvironment) Execute(ctx context.Context, execCtx ExecutorContext, command Command) error {
