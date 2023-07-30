@@ -41,7 +41,7 @@ When a container is started, the working directory is mounted into the container
 
 **Using local shell**
 
-The `@local` keyword tells Supermake to go back to an uncontainerized shell, optionally with a custom entrypoint. All commands use this environment by default, with "sh -ce" as the entrypoint.
+The `@local` keyword tells Supermake to go back to an uncontainerized shell, with an optional custom entrypoint. All commands use this environment by default, with "sh -ce" as the def ault entrypoint.
 
 Let's augment our Makefile with environments.
 ```Makefile
@@ -62,7 +62,7 @@ One issue with traditional Makefiles is the lack of built-in parallel processing
 
 Supermake targets run in parallel whenever possible. They may also be nested to increase readability; Nested targets can also be used in conjunction with other steps.
 
-Let's speed up our testing step by splitting it up into three parallel testing runs. As an example, we will make `test_c` wait on `test_a` before starting.
+Let's speed up our testing step by splitting it up into three parallel testing runs. In this example, our end-to-end tests will also wait for both unit and integrations tests to pass first.
 ```Makefile
 build: test
 	docker build -t myimage .
@@ -70,24 +70,24 @@ build: test
 test:
 	echo 'Starting tests'
 
-	test_a:
+	unit:
 		@python:3.11
-		pytest -x tests/a/
+		pytest -x tests/unit/
 
-	test_b:
+	integration:
 		@python:3.11
-		pytest -x tests/b/
+		pytest -x tests/integration/
 
-	test_c: test_a
+	e2e: unit integration
 		@python:3.11
-		pytest -x tests/c/
+		pytest -x tests/e2e/
 
 	echo 'All tests passed :)'
 ```
 
-In this example, the `test` target will run steps normally until it encounters `test_a`, `test_b` and `test_c`, which it will run in parallel (waiting for test_a before running test_c). It will wait for all consecutive subtargets before evaluating the next step, or exiting the target.
+In this example, the `test` target will run steps normally until it encounters `unit`, `integration` and `e2e`, which it will run in parallel.
 
-It is possible to run subtargets by using `supermake test::test_a`. Subtargets can be nested as deep as you want, though this is discouraged.
+It is possible to run subtargets by using `supermake test::unit`. Subtargets can be nested as deep as you want, though this is discouraged.
 
 ### Distributed pipelines & runner selectors
 When using distributed pipelines, targets can be ran on specific runners via an environment-like directive on the target line. It takes the following form:
@@ -107,13 +107,17 @@ build@debian-docker: test
 test:
 	echo 'Starting tests'
 
-	test_a:
+	unit:
 		@python:3.11
-		python manage.py test a
+		pytest -x tests/unit/
 
-	test_b:
+	integration:
 		@python:3.11
-		python manage.py test b
+		pytest -x tests/integration/
+
+	e2e: unit integration
+		@python:3.11
+		pytest -x tests/e2e/
 
 	echo 'All tests passed :)'
 ```

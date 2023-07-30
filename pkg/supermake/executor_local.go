@@ -22,7 +22,7 @@ func NewLocalEnvironment() *LocalEnvironment {
 func startAndStreamOutput(ctx context.Context, command string, args []string, vars Variables, logger *log.Logger) error {
 	cmd := exec.CommandContext(ctx, command, args...)
 
-	cmd.Env = append(cmd.Env, vars.EnvStrings()...)
+	cmd.Env = append(cmd.Env, vars.EnvStringsInherited()...)
 
 	output, err := cmd.CombinedOutput()
 	output = bytes.TrimRight(output, "\n\r")

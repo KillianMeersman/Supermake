@@ -7,8 +7,22 @@ import (
 
 type Variables map[string]*Variable
 
+// Returns a list of strings like K=V.
 func (v Variables) EnvStrings() []string {
 	strings := make([]string, 0, len(v))
+	for _, v := range v {
+		strings = append(strings, v.EnvString())
+	}
+
+	return strings
+}
+
+// Returns a list of strings like K=V.
+// Including those inherited by the calling shell.
+func (v Variables) EnvStringsInherited() []string {
+	strings := make([]string, 0, len(v))
+
+	strings = append(strings, os.Environ()...)
 	for _, v := range v {
 		strings = append(strings, v.EnvString())
 	}

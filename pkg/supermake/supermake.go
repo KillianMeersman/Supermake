@@ -19,18 +19,13 @@ func (s *SupermakeFile) Reset() {
 	}
 }
 
-func (s *SupermakeFile) Run(ctx context.Context, target string) error {
+func (s *SupermakeFile) Run(ctx context.Context, target, cwd string) error {
 	t, ok := s.Targets[target]
 	if !ok {
 		return fmt.Errorf("no such target: %s", target)
 	}
 
-	cwd, err := os.Getwd()
-	if err != nil {
-		return err
-	}
-
-	logger := log.NewLogger(log.TRACE, log.ShellColoredLevels, os.Stdout, os.Stderr)
+	logger := log.NewLogger(log.INFO, log.ShellColoredLevels, os.Stdout, os.Stderr)
 
 	logger.Debug("VARIABLES:")
 	for k, v := range t.Variables {
@@ -46,7 +41,7 @@ func (s *SupermakeFile) Run(ctx context.Context, target string) error {
 		Logger:        logger,
 		Scheduler:     scheduler,
 	}
-	err = scheduler.ScheduleTarget(ctx, execCtx, t)
+	err := scheduler.ScheduleTarget(ctx, execCtx, t)
 	if err != nil {
 		logger.Fatal(err.Error())
 	}

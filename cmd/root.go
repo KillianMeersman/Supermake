@@ -12,6 +12,7 @@ import (
 )
 
 var file string = "./Supermake"
+var cwd string = "."
 var skipTargets []string = []string{}
 var timeout time.Duration
 
@@ -35,7 +36,7 @@ var rootCmd = &cobra.Command{
 		defer cancel()
 
 		for _, target := range args {
-			err = file.Run(ctx, target)
+			err = file.Run(ctx, target, cwd)
 			if err != nil {
 				log.Fatal(err)
 			}
@@ -45,6 +46,7 @@ var rootCmd = &cobra.Command{
 
 func init() {
 	rootCmd.PersistentFlags().StringVarP(&file, "file", "f", "./Supermake", "Supermake file to use")
+	rootCmd.PersistentFlags().StringVarP(&cwd, "cwd", "c", ".", "Working directory")
 	rootCmd.PersistentFlags().StringArrayVarP(&skipTargets, "outdated", "o", []string{}, "Targets to skip")
 	rootCmd.PersistentFlags().DurationVarP(&timeout, "timeout", "t", 10*time.Minute, "Timeout, expressed as a string e.g. '5m'")
 }

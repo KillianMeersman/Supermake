@@ -13,7 +13,7 @@ import (
 )
 
 var targetRegex = regexp.MustCompile(`^([a-zA-Z0-9-/_.@]+):(?: +(.*))?$`)
-var executorRegex = regexp.MustCompile(`^([a-zA-Z0-9]*?)@([a-zA-Z0-9-_:.]+)( .*)?$`)
+var executorRegex = regexp.MustCompile(`^([a-zA-Z0-9]*?)@([a-zA-Z0-9-_:.$]+)( .*)?$`)
 var variableDeclarationRegex = regexp.MustCompile(`^(export +)?(\w+) +(=|:=|\?=) +(.*)$`)
 
 const COMMENT_CHARS = "#"
@@ -419,7 +419,7 @@ func ParseSupermakeFileV2(path string) (*supermake.SupermakeFile, error) {
 }
 
 func ParseSupermakeString(data string) (*supermake.SupermakeFile, error) {
-	lines := util.SplitLines(data)
+	lines := util.SplitEscapedLines(data)
 
 	parser := NewParser(lines)
 	return parser.Parse()
