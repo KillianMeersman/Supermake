@@ -21,7 +21,7 @@ var rootCmd = &cobra.Command{
 	Short: "Supermake is a modern CI pipelining tool",
 	Args:  cobra.MinimumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		file, err := parse.ParseSupermakeFileV2(file)
+		file, err := parse.ParseSupermakeFileV2(cwd, file)
 		if err != nil {
 			log.Fatal(err)
 		}

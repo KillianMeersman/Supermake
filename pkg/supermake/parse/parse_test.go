@@ -82,7 +82,7 @@ anotherhelp2:
 `
 
 func TestParsing(t *testing.T) {
-	file, err := parse.ParseSupermakeString(Makefile)
+	file, err := parse.ParseSupermakeString(".", Makefile)
 	if err != nil {
 		t.FailNow()
 	}

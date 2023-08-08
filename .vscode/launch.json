@@ -25,7 +25,9 @@
                 "/home/killy/Code/JustRussel/backend/Supermake",
                 "-c",
                 "/home/killy/Code/JustRussel/backend",
-                "build"
+                "-o",
+                "production",
+                "production_test"
             ]
         }
     ]

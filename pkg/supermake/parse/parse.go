@@ -35,6 +35,7 @@ type SuperMakeFileParser struct {
 	indent    []int
 	sourcemap []int
 	lineTypes []LineType
+	Variables supermake.Variables
 }
 
 func NewParser(lines []string) *SuperMakeFileParser {
@@ -44,12 +45,24 @@ func NewParser(lines []string) *SuperMakeFileParser {
 	}
 }
 
+func getLineType(line string) LineType {
+	if variableDeclarationRegex.MatchString(line) {
+		return VARIABLE
+	} else if targetRegex.MatchString(line) {
+		return TARGET
+	} else if executorRegex.MatchString(line) {
+		return EXECUTOR
+	}
+	return COMMAND
+}
+
 // Build a map of cleaned lines and their indentation levels and class.
 // Removes indentation characters as well as comments.
-func (p *SuperMakeFileParser) cleanAndMapLines() {
+func (p *SuperMakeFileParser) cleanAndMapLines(cwd string) error {
 	p.indent = make([]int, 0, len(p.rawLines))
 	p.lines = make([]string, 0, len(p.rawLines))
 	p.sourcemap = make([]int, 0)
+	p.Variables = make(supermake.Variables)
 
 	// build indentation level map
 	for i, line := range p.rawLines {
@@ -72,13 +85,18 @@ func (p *SuperMakeFileParser) cleanAndMapLines() {
 			continue
 		}
 
-		lineType := COMMAND
-		if variableDeclarationRegex.MatchString(line) {
-			lineType = VARIABLE
-		} else if targetRegex.MatchString(line) {
-			lineType = TARGET
-		} else if executorRegex.MatchString(line) {
-			lineType = EXECUTOR
+		line, err := evaluateVariables(cwd, line, p.Variables)
+		if err != nil {
+			return err
+		}
+
+		lineType := getLineType(line)
+		if lineType == VARIABLE {
+			variable, err := parseVariable(cwd, line, p.Variables)
+			if err != nil {
+				return fmt.Errorf("error on line %s: %s", line, err)
+			}
+			p.Variables[variable.Name] = variable
 		}
 
 		p.indent = append(p.indent, indentation)
@@ -86,22 +104,8 @@ func (p *SuperMakeFileParser) cleanAndMapLines() {
 		p.sourcemap = append(p.sourcemap, i)
 		p.lineTypes = append(p.lineTypes, lineType)
 	}
-}
 
-func (p *SuperMakeFileParser) parseGlobalVariables() (map[string]*supermake.Variable, error) {
-	variables := make(map[string]*supermake.Variable)
-
-	for ; p.i < len(p.lines); p.i++ {
-		if p.lineTypes[p.i] == VARIABLE {
-			variable, err := parseVariable(p.lines[p.i], variables)
-			if err != nil {
-				return nil, fmt.Errorf("error on line %d: %s", p.sourcemap[p.i]+1, err)
-			}
-			variables[variable.Name] = variable
-		}
-	}
-
-	return variables, nil
+	return nil
 }
 
 func (p *SuperMakeFileParser) parseTargets(variables supermake.Variables) (supermake.Targets, error) {
@@ -121,22 +125,21 @@ func (p *SuperMakeFileParser) parseTargets(variables supermake.Variables) (super
 	return targets, nil
 }
 
-func (p *SuperMakeFileParser) Parse() (*supermake.SupermakeFile, error) {
-	p.cleanAndMapLines()
-	globalVariables, err := p.parseGlobalVariables()
+func (p *SuperMakeFileParser) Parse(cwd string) (*supermake.SupermakeFile, error) {
+	err := p.cleanAndMapLines(cwd)
 	if err != nil {
 		return nil, err
 	}
 
 	p.i = 0
-	targets, err := p.parseTargets(globalVariables)
+	targets, err := p.parseTargets(p.Variables)
 	if err != nil {
 		return nil, err
 	}
 
 	return &supermake.SupermakeFile{
 		Targets:   targets,
-		Variables: globalVariables,
+		Variables: p.Variables,
 	}, nil
 }
 
@@ -211,10 +214,7 @@ func (p *SuperMakeFileParser) parseCommandBlock(variables supermake.Variables, d
 
 	// Parse custom executor if required
 	if p.lineTypes[p.i] == EXECUTOR {
-		line, err := evaluateVariables(p.lines[p.i], variables)
-		if err != nil {
-			return nil, nil, defaultName, err
-		}
+		line := p.lines[p.i]
 		groups := executorRegex.FindStringSubmatch(line)
 
 		if groups[1] != "" {
@@ -242,10 +242,7 @@ func (p *SuperMakeFileParser) parseCommandBlock(variables supermake.Variables, d
 			break
 		}
 
-		line, err := evaluateVariables(p.lines[p.i], variables)
-		if err != nil {
-			return nil, nil, name, err
-		}
+		line := p.lines[p.i]
 		commands = append(commands, line)
 	}
 
@@ -326,7 +323,7 @@ func (p *SuperMakeFileParser) parseTarget(variables supermake.Variables, targets
 	return target, nil
 }
 
-func runShellScript(script string, variables map[string]*supermake.Variable) ([]byte, error) {
+func runShellScript(cwd, script string, variables supermake.Variables) ([]byte, error) {
 	cmd := exec.Command("sh", "-c", script)
 	// Set environment variables
 	for _, v := range variables {
@@ -347,12 +344,12 @@ func runShellScript(script string, variables map[string]*supermake.Variable) ([]
 	return stdout.Bytes(), nil
 }
 
-func evaluateVariables(line string, variables map[string]*supermake.Variable) (string, error) {
+func evaluateVariables(cwd, line string, variables supermake.Variables) (string, error) {
 	line, err := ReplaceVariables(line, func(v string) (string, error) {
 		if strings.HasPrefix(v, "shell ") {
 			// Run shell command
 			shellString := strings.TrimPrefix(v, "shell ")
-			stdout, err := runShellScript(shellString, variables)
+			stdout, err := runShellScript(cwd, shellString, variables)
 			if err != nil {
 				return "", fmt.Errorf("variable shell command failed to execute: '%s': %s", shellString, err)
 			}
@@ -376,7 +373,7 @@ func evaluateVariables(line string, variables map[string]*supermake.Variable) (s
 	return line, nil
 }
 
-func parseVariable(line string, variables map[string]*supermake.Variable) (*supermake.Variable, error) {
+func parseVariable(cwd, line string, variables map[string]*supermake.Variable) (*supermake.Variable, error) {
 	groups := variableDeclarationRegex.FindStringSubmatch(line)
 	export := false
 
@@ -400,7 +397,7 @@ func parseVariable(line string, variables map[string]*supermake.Variable) (*supe
 	}
 
 	// Value
-	value, err := evaluateVariables(groups[4], variables)
+	value, err := evaluateVariables(cwd, groups[4], variables)
 	if err != nil {
 		return nil, err
 	}
@@ -408,19 +405,19 @@ func parseVariable(line string, variables map[string]*supermake.Variable) (*supe
 	return supermake.NewVariable(identifier, evaluationType, export, value), nil
 }
 
-func ParseSupermakeFileV2(path string) (*supermake.SupermakeFile, error) {
+func ParseSupermakeFileV2(cwd, path string) (*supermake.SupermakeFile, error) {
 	dataBytes, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
 
 	data := string(dataBytes)
-	return ParseSupermakeString(data)
+	return ParseSupermakeString(cwd, data)
 }
 
-func ParseSupermakeString(data string) (*supermake.SupermakeFile, error) {
+func ParseSupermakeString(cwd, data string) (*supermake.SupermakeFile, error) {
 	lines := util.SplitEscapedLines(data)
 
 	parser := NewParser(lines)
-	return parser.Parse()
+	return parser.Parse(cwd)
 }
