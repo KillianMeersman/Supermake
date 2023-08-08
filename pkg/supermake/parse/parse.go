@@ -224,6 +224,10 @@ func (p *SuperMakeFileParser) parseCommandBlock(variables supermake.Variables, d
 		image := strings.TrimSpace(groups[2])
 		entrypoint := strings.Split(strings.TrimSpace(groups[3]), " ")
 
+		if len(entrypoint) > 0 && entrypoint[0] == "" {
+			entrypoint = []string{}
+		}
+
 		if image == "local" {
 			executor = &supermake.LocalEnvironment{
 				Entrypoint: entrypoint,

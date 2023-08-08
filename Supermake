@@ -1,18 +1,34 @@
-build: test
+build:
+	go build -o bin/supermake
+
+mac: test tidy
+	@golang:1.20
+	GOOS=darwin GOARCH=amd64 go build -buildvcs=false -o bin/supermake_darwin_64
+
+linux: test tidy
+	@golang:1.20
+	GOOS=linux GOARCH=amd64 go build -buildvcs=false -o bin/supermake_linux_64
+	OOS=linux GOARCH=386 go build -buildvcs=false -o bin/supermake_linux_32
+
+windows: test tidy
+	@golang:1.20
+	GOOS=windows GOARCH=amd64 go build -buildvcs=false -o bin/supermake_windows_64.exe
+	GOOS=windows GOARCH=386 go build -buildvcs=false -o bin/supermake_windows_32.exe
+
+tidy:
 	go mod tidy
-	go generate ./...
-	go build -o supermake
 
 test:
 	go test -v ./...
 
-install: build
-	sudo cp -f supermake /usr/local/bin/supermake
+install: build uninstall
+	sudo cp -f bin/supermake /usr/local/bin/supermake
+	sudo cp -l /usr/local/bin/supermake /usr/local/bin/smake
 
 uninstall:
-	sudo rm -f /usr/local/bin/supermake
+	sudo rm -f /usr/local/bin/supermake /usr/local/bin/smake
 
 clean:
-	rm supermake || true.*
+	rm -rf bin .cache || true
 
 .PHONY: run build clean

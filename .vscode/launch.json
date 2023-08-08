@@ -15,6 +15,16 @@
             ]
         },
         {
+            "name": "Install",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceFolder}/main.go",
+            "args": [
+                "install",
+            ]
+        },
+        {
             "name": "JustRussel",
             "type": "go",
             "request": "launch",

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path"
 	"time"
 
 	"github.com/KillianMeersman/Supermake/pkg/supermake/parse"
@@ -34,6 +35,15 @@ var rootCmd = &cobra.Command{
 
 		ctx, cancel := context.WithTimeout(context.Background(), timeout)
 		defer cancel()
+
+		if !path.IsAbs(cwd) {
+			cd, err := os.Getwd()
+			if err != nil {
+				panic(err)
+			}
+
+			cwd = path.Join(cd, cwd)
+		}
 
 		for _, target := range args {
 			err = file.Run(ctx, target, cwd)

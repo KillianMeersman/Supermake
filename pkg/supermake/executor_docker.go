@@ -3,9 +3,9 @@ package supermake
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
-	"strings"
+	"os/user"
 
+	"github.com/KillianMeersman/Supermake/pkg/supermake/docker"
 	"github.com/KillianMeersman/Supermake/pkg/supermake/log"
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
@@ -20,94 +20,34 @@ type DockerEnvironment struct {
 	Entrypoint []string
 }
 
-type imageURL struct {
-	Registry string
-	Name     string
-	Tag      string
-}
-
-func parseImageURL(url string) (*imageURL, error) {
-	parts := strings.Split(url, "/")
-
-	registry := "docker.io"
-	path := parts
-	if len(parts) > 1 {
-		if strings.Contains(parts[0], ".") {
-			registry = parts[0]
-			path = parts[1:]
-		}
-	} else {
-		path = []string{"library"}
-		path = append(path, parts...)
-	}
-
-	tag := "latest"
-	parts = strings.SplitN(path[len(path)-1], ":", 2)
-	if len(parts) > 1 {
-		tag = parts[1]
-		path[len(path)-1] = parts[0]
-	}
-
-	return &imageURL{
-		Registry: registry,
-		Name:     strings.Join(path, "/"),
-		Tag:      tag,
-	}, nil
-}
-
-func (u *imageURL) String() string {
-	return fmt.Sprintf("%s/%s:%s", u.Registry, u.Name, u.Tag)
-}
-
 func (d *DockerEnvironment) Execute(ctx context.Context, execCtx ExecutorContext, command Command) error {
 	mobyClient, err := client.NewClientWithOpts()
 	if err != nil {
 		return err
 	}
 
-	imageURL, err := parseImageURL(d.Image)
+	imageURL, err := docker.ParseImageURL(d.Image)
 	if err != nil {
 		return err
 	}
 
 	dockerWorkingDir := "/supermake/"
 
-	pull := true
-	images, err := mobyClient.ImageList(ctx, types.ImageListOptions{})
+	err = docker.GetOrPullImage(ctx, mobyClient, imageURL)
 	if err != nil {
 		return err
 	}
-searchimages:
-	for _, image := range images {
-		for _, tag := range image.RepoTags {
-			if tag == d.Image {
-				pull = false
-				break searchimages
-			}
-		}
-	}
 
-	if pull {
-		execCtx.Logger.Debug("pulling image", "image", imageURL.String())
-
-		output, err := mobyClient.ImagePull(ctx, imageURL.String(), types.ImagePullOptions{
-			Platform: "linux/amd64",
-			All:      false,
-		})
-		if err != nil {
-			return err
-		}
-		_, err = ioutil.ReadAll(output)
-		if err != nil {
-			return err
-		}
-
-		defer output.Close()
-	} else {
-		execCtx.Logger.Debug("image already available", "image", imageURL.String())
+	if len(d.Entrypoint) == 0 {
+		d.Entrypoint = []string{"sh", "-ce"}
 	}
 
 	entrypoint, cmd := ParseInterpreterCommand(d.Entrypoint, command.GetShellCommands())
+
+	user, err := user.Current()
+	if err != nil {
+		execCtx.Logger.Panic(err.Error())
+	}
 
 	config := &container.Config{
 		Image:      imageURL.String(),
@@ -116,7 +56,9 @@ searchimages:
 		WorkingDir: dockerWorkingDir,
 		Tty:        true,
 		Env:        execCtx.EnvVars.EnvStrings(),
+		User:       fmt.Sprintf("%s:%s", user.Uid, user.Gid),
 	}
+
 	hostConfig := &container.HostConfig{
 		Mounts: []mount.Mount{
 			{
@@ -144,16 +86,12 @@ searchimages:
 		return err
 	}
 
-	logs, err := mobyClient.ContainerLogs(ctx, dockerContainer.ID, types.ContainerLogsOptions{
-		ShowStdout: true,
-		ShowStderr: true,
-	})
+	logStream, err := docker.StreamContainerLogs(ctx, mobyClient, dockerContainer.ID)
 	if err != nil {
 		return err
 	}
-	defer logs.Close()
-
-	log.StreamReaderNewLines(execCtx.Logger, logs)
+	defer logStream.Close()
+	log.StreamReaderNewLines(execCtx.Logger, logStream)
 
 	waitChan, errChan := mobyClient.ContainerWait(ctx, dockerContainer.ID, container.WaitConditionNotRunning)
 	select {
@@ -165,6 +103,11 @@ searchimages:
 
 		statusCode := wait.StatusCode
 		if statusCode != 0 {
+			logs, err := docker.GetContainerLogs(ctx, mobyClient, dockerContainer.ID)
+			if err != nil {
+				execCtx.Logger.Panic(err.Error())
+			}
+			execCtx.Logger.Error(string(logs))
 			return fmt.Errorf("container returned non-zero exit code: %d", statusCode)
 		}
 	case err := <-errChan:
