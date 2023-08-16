@@ -59,6 +59,13 @@ var run = &cobra.Command{
 			}
 		}
 
+		for _, target := range file.GetDoneFileTargets() {
+			err := scheduler.TargetDone(ctx, target)
+			if err != nil {
+				log.Fatal(err)
+			}
+		}
+
 		if !path.IsAbs(cwd) {
 			cd, err := os.Getwd()
 			if err != nil {

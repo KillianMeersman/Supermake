@@ -7,7 +7,9 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/KillianMeersman/Supermake/pkg/supermake/datastructures"
 	"github.com/KillianMeersman/Supermake/pkg/supermake/log"
+	"github.com/KillianMeersman/Supermake/pkg/supermake/util"
 )
 
 type SupermakeFile struct {
@@ -69,4 +71,24 @@ func (s *SupermakeFile) Help() string {
 	}
 
 	return text.String()
+}
+
+func (s *SupermakeFile) GetDoneFileTargets() []*Target {
+	phonies := datastructures.NewUnorderedSet[string]()
+	doneFileTargets := make([]*Target, 0)
+
+	phony, ok := s.Targets[".PHONY"]
+	if ok {
+		for _, dep := range phony.Dependencies {
+			phonies.Add(dep)
+		}
+	}
+
+	for _, target := range s.Targets {
+		if !phonies.Contains(target.Name()) && util.IsFileOrFolder(target.Name()) {
+			doneFileTargets = append(doneFileTargets, target)
+		}
+	}
+
+	return doneFileTargets
 }

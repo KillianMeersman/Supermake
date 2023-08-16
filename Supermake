@@ -37,7 +37,8 @@ install: build uninstall
 uninstall:
 	sudo rm -f /usr/local/bin/supermake /usr/local/bin/smake
 
+test.txt:
+	echo 'test2' > test.txt
+
 clean:
 	rm -rf bin .cache || true
-
-.PHONY: run build clean

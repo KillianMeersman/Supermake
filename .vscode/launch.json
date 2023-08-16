@@ -29,6 +29,17 @@
             ]
         },
         {
+            "name": "test",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceFolder}/main.go",
+            "args": [
+                "run",
+                "test.txt"
+            ]
+        },
+        {
             "name": "JustRussel",
             "type": "go",
             "request": "launch",
