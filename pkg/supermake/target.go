@@ -16,8 +16,6 @@ type Target struct {
 	Variables    Variables
 	Executor     CommandExecutor
 	Steps        []Command
-	lock         *sync.Mutex
-	done         bool
 }
 
 func NewTarget(name, node string, dependencies []string, executor CommandExecutor, steps []Command, variables Variables) *Target {
@@ -28,8 +26,6 @@ func NewTarget(name, node string, dependencies []string, executor CommandExecuto
 		Executor:     executor,
 		Steps:        steps,
 		Variables:    variables,
-		lock:         &sync.Mutex{},
-		done:         false,
 	}
 }
 
@@ -55,7 +51,7 @@ func (t *Target) runDependencies(ctx context.Context, execCtx ExecutorContext) e
 			}
 		}
 
-		// execCtx.Logger.Debug("running dependency target", "dependency", dependencyTarget.FQN())
+		execCtx.Logger.Debug("running dependency target", "dependency", dependencyTarget.FQN())
 		go func() {
 			defer wg.Done()
 			err := execCtx.Scheduler.ScheduleTarget(subTargetCtx, execCtx, dependencyTarget)
@@ -81,33 +77,13 @@ func (t *Target) runDependencies(ctx context.Context, execCtx ExecutorContext) e
 func (t *Target) Name() string {
 	parts := strings.Split(t.name, "::")
 	return parts[len(parts)-1]
-
 }
 
 func (t *Target) FQN() string {
 	return t.name
 }
 
-func (t *Target) Done() {
-	t.lock.Lock()
-	defer t.lock.Unlock()
-	t.done = true
-}
-
-func (t *Target) Reset() {
-	t.lock.Lock()
-	defer t.lock.Unlock()
-	t.done = false
-}
-
 func (t *Target) Run(ctx context.Context, execCtx ExecutorContext) error {
-	t.lock.Lock()
-	defer t.lock.Unlock()
-
-	if t.done {
-		return nil
-	}
-
 	logger := execCtx.Logger.With("target", t.FQN())
 	execCtx.Logger = logger
 
@@ -126,6 +102,5 @@ func (t *Target) Run(ctx context.Context, execCtx ExecutorContext) error {
 		}
 	}
 
-	t.done = true
 	return nil
 }

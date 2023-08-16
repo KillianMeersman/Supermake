@@ -35,11 +35,18 @@ or
 
 All following steps, up until another environment or the end of the target, will be ran in this shell or environment. They can be given a custom name, so as to make it easier to follow logs.
 
-**Using containers**
+#### Using containers
 
 When a container is started, the working directory is mounted into the container's working directory. This way, you do not need to fiddle with manual extraction of files.
 
-**Using local shell**
+**Notes on containers**
+All containers:
+- Run with the calling user's UID and GUID.
+- Run with host networking mode.
+- Are automatically removed after running.
+- Use 'sh -ce' as entrypoint unless explicitly provided, irrespective of the image's original entrypoint.
+
+#### Using local shell
 
 The `@local` keyword tells Supermake to go back to an uncontainerized shell, with an optional custom entrypoint. All commands use this environment by default, with "sh -ce" as the def ault entrypoint.
 

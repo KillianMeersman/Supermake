@@ -26,3 +26,9 @@ func StreamContainerLogs(ctx context.Context, client *client.Client, container s
 		ShowStderr: true,
 	})
 }
+
+func RemoveContainer(ctx context.Context, client *client.Client, id string) error {
+	return client.ContainerRemove(ctx, id, types.ContainerRemoveOptions{
+		Force: true,
+	})
+}

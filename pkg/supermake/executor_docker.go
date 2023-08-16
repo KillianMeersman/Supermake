@@ -26,6 +26,9 @@ func (d *DockerEnvironment) Execute(ctx context.Context, execCtx ExecutorContext
 		return err
 	}
 
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
 	imageURL, err := docker.ParseImageURL(d.Image)
 	if err != nil {
 		return err
@@ -38,11 +41,7 @@ func (d *DockerEnvironment) Execute(ctx context.Context, execCtx ExecutorContext
 		return err
 	}
 
-	if len(d.Entrypoint) == 0 {
-		d.Entrypoint = []string{"sh", "-ce"}
-	}
-
-	entrypoint, cmd := ParseInterpreterCommand(d.Entrypoint, command.GetShellCommands())
+	entrypoint, cmd := ParseInterpreterCommand(execCtx.EnvVars, d.Entrypoint, command.GetShellCommands())
 
 	user, err := user.Current()
 	if err != nil {
@@ -76,11 +75,9 @@ func (d *DockerEnvironment) Execute(ctx context.Context, execCtx ExecutorContext
 	if err != nil {
 		return err
 	}
-	defer mobyClient.ContainerRemove(ctx, dockerContainer.ID, types.ContainerRemoveOptions{
-		Force: true,
-	})
+	defer docker.RemoveContainer(ctx, mobyClient, dockerContainer.ID)
 
-	execCtx.Logger.Info("starting container", "image", imageURL.String())
+	execCtx.Logger.Debug("starting container", "image", imageURL.String())
 	err = mobyClient.ContainerStart(ctx, dockerContainer.ID, types.ContainerStartOptions{})
 	if err != nil {
 		return err
@@ -114,7 +111,7 @@ func (d *DockerEnvironment) Execute(ctx context.Context, execCtx ExecutorContext
 		return err
 	}
 
-	execCtx.Logger.Info("container finished", "image", imageURL.String())
+	execCtx.Logger.Debug("container finished", "image", imageURL.String())
 	if err != nil {
 		return err
 	}

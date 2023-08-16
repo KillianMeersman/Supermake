@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
+	"sync"
 
 	"github.com/KillianMeersman/Supermake/pkg/supermake/log"
 )
@@ -13,38 +15,58 @@ type SupermakeFile struct {
 	Variables Variables
 }
 
-func (s *SupermakeFile) Reset() {
-	for _, target := range s.Targets {
-		target.Reset()
-	}
-}
-
-func (s *SupermakeFile) Run(ctx context.Context, target, cwd string) error {
-	t, ok := s.Targets[target]
-	if !ok {
-		return fmt.Errorf("no such target: %s", target)
-	}
-
+func (s *SupermakeFile) Run(ctx context.Context, scheduler Scheduler, cwd string, targets ...string) error {
 	logger := log.NewLogger(log.INFO, log.ShellColoredLevels, os.Stdout, os.Stderr)
-
-	logger.Debug("VARIABLES:")
-	for k, v := range t.Variables {
-		logger.Debug(fmt.Sprintf("%s = %s", k, v.Value()))
-	}
-
-	scheduler := &LocalScheduler{}
 	execCtx := ExecutorContext{
 		EnvVars:       s.Variables,
 		Targets:       s.Targets,
-		ParentTargets: make(map[string]Runable),
+		ParentTargets: make(Targets),
 		WorkingDir:    cwd,
 		Logger:        logger,
 		Scheduler:     scheduler,
 	}
-	err := scheduler.ScheduleTarget(ctx, execCtx, t)
-	if err != nil {
-		logger.Fatal(err.Error())
+
+	wg := sync.WaitGroup{}
+	errs := make(chan error, len(targets))
+
+	for _, target := range targets {
+		t, ok := s.Targets[target]
+		if !ok {
+			return fmt.Errorf("no such target: %s", target)
+		}
+
+		logger.Debug("VARIABLES:")
+		for k, v := range t.Variables {
+			logger.Debug(fmt.Sprintf("%s = %s", k, v.Value()))
+		}
+
+		wg.Add(1)
+		go func() {
+			err := scheduler.ScheduleTarget(ctx, execCtx, t)
+			if err != nil {
+				errs <- err
+			}
+			wg.Done()
+		}()
 	}
 
-	return err
+	go func() {
+		wg.Wait()
+		errs <- nil
+	}()
+
+	return <-errs
+}
+
+func (s *SupermakeFile) Help() string {
+	text := strings.Builder{}
+
+	text.WriteString("Targets:\n")
+	text.WriteString("========\n")
+
+	for _, target := range s.Targets {
+		text.WriteString(fmt.Sprintf("%s - No description\n", target.FQN()))
+	}
+
+	return text.String()
 }

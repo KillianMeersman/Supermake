@@ -14,7 +14,7 @@ type LocalEnvironment struct {
 
 func NewLocalEnvironment() *LocalEnvironment {
 	return &LocalEnvironment{
-		Entrypoint: []string{"sh", "-ce"},
+		Entrypoint: []string{},
 	}
 }
 
@@ -58,6 +58,6 @@ func startAndStreamOutput(ctx context.Context, command string, args []string, va
 }
 
 func (l *LocalEnvironment) Execute(ctx context.Context, execCtx ExecutorContext, command Command) error {
-	entrypoint, cmd := ParseInterpreterCommand(l.Entrypoint, command.GetShellCommands())
+	entrypoint, cmd := ParseInterpreterCommand(execCtx.EnvVars, l.Entrypoint, command.GetShellCommands())
 	return startAndStreamOutput(ctx, entrypoint, cmd, execCtx.EnvVars, execCtx.Logger)
 }

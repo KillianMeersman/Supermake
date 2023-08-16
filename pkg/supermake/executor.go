@@ -7,7 +7,19 @@ import (
 	"github.com/KillianMeersman/Supermake/pkg/supermake/log"
 )
 
-func ParseInterpreterCommand(entrypoint, commands []string) (string, []string) {
+func parseDefaultEntrypoint(variables Variables) []string {
+	ep, ok := variables[".SHELL"]
+	if !ok {
+		return []string{"sh", "-ce"}
+	}
+
+	return strings.Split(ep.Value(), " ")
+}
+
+func ParseInterpreterCommand(variables Variables, entrypoint, commands []string) (string, []string) {
+	if len(entrypoint) == 0 {
+		entrypoint = parseDefaultEntrypoint(variables)
+	}
 	args := entrypoint[1:]
 
 	cmd := strings.Join(commands, "\n")
@@ -30,7 +42,7 @@ type Runable interface {
 type ExecutorContext struct {
 	EnvVars       Variables
 	Targets       Targets
-	ParentTargets map[string]Runable
+	ParentTargets Targets
 	WorkingDir    string
 	Logger        *log.Logger
 	Scheduler     Scheduler
