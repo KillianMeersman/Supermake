@@ -36,6 +36,7 @@ var run = &cobra.Command{
 		ctx, cancel := context.WithTimeout(context.Background(), timeout)
 		defer cancel()
 
+		// Capture sigint
 		c := make(chan os.Signal, 1)
 		signal.Notify(c, os.Interrupt)
 		go func() {

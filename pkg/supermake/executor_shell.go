@@ -4,6 +4,7 @@ import (
 	"context"
 	"os/exec"
 	"sync"
+	"time"
 
 	"github.com/KillianMeersman/Supermake/pkg/supermake/log"
 )
@@ -20,7 +21,11 @@ func NewLocalEnvironment() *LocalEnvironment {
 
 // Start an interpreter and feed commands into stdin, logs stdout and stderr to the logger as INFO level logs.
 func startAndStreamOutput(ctx context.Context, command string, args []string, vars Variables, logger *log.Logger) error {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
 	cmd := exec.CommandContext(ctx, command, args...)
+	cmd.WaitDelay = 3 * time.Second
 
 	// Set env
 	cmd.Env = append(cmd.Env, vars.EnvStringsInherited()...)

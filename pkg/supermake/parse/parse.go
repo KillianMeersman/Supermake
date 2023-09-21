@@ -14,7 +14,7 @@ import (
 
 var targetRegex = regexp.MustCompile(`^([a-zA-Z0-9-/_.@]+):(?: +(.*))?$`)
 var executorRegex = regexp.MustCompile(`^([a-zA-Z0-9]*?)@([a-zA-Z0-9-_:.$]+)( .*)?$`)
-var variableDeclarationRegex = regexp.MustCompile(`^(export +)?(.+) +(=|:=|\?=) +(.*)$`)
+var variableDeclarationRegex = regexp.MustCompile(`^(export +)?(.+?) *(=|:=|\?=) *(.*)$`)
 
 const COMMENT_CHARS = "#"
 
