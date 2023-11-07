@@ -1,11 +1,11 @@
-GOCACHE = /tmp/.cache
-.SHELL = bash -ce
+export GOCACHE = /tmp/.cache
 
 build:
 	go mod tidy
 	go build -o bin/supermake
 
 test:
+	env
 	go test -v -race ./...
 
 all: linux mac windows
@@ -21,7 +21,7 @@ linux: test
 
 	@golang:1.20
 	GOOS=linux GOARCH=amd64 go build -buildvcs=false -o bin/supermake_linux_64
-	OOS=linux GOARCH=386 go build -buildvcs=false -o bin/supermake_linux_32
+	GOOS=linux GOARCH=386 go build -buildvcs=false -o bin/supermake_linux_32
 
 windows: test
 	echo 'Building windows binaries'
@@ -36,9 +36,6 @@ install: build uninstall
 
 uninstall:
 	sudo rm -f /usr/local/bin/supermake /usr/local/bin/smake
-
-test.txt:
-	echo 'test2' > test.txt
 
 clean:
 	rm -rf bin .cache || true

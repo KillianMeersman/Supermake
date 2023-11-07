@@ -88,7 +88,7 @@ func (d *DockerEnvironment) Execute(ctx context.Context, execCtx ExecutorContext
 		return err
 	}
 	defer logStream.Close()
-	log.StreamReaderNewLines(execCtx.Logger, logStream)
+	log.StreamReaderNewLines(execCtx.Logger.Info, logStream)
 
 	waitChan, errChan := mobyClient.ContainerWait(ctx, dockerContainer.ID, container.WaitConditionNotRunning)
 	select {

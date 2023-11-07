@@ -49,12 +49,12 @@ func startAndStreamOutput(ctx context.Context, command string, args []string, va
 	wg.Add(2)
 
 	go func() {
-		log.StreamReaderNewLines(logger, stdout)
+		log.StreamReaderNewLines(logger.Info, stdout)
 		wg.Done()
 	}()
 
 	go func() {
-		log.StreamReaderNewLines(logger, stderr)
+		log.StreamReaderNewLines(logger.Error, stderr)
 		wg.Done()
 	}()
 

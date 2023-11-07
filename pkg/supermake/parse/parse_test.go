@@ -23,6 +23,7 @@ export API_IMAGE := registry.test/backend/api:$(API_VERSION)
 export AUXILIARY_VERSION ?= $(API_VERSION)
 export NAMESPACE := $(ENVIRONMENT)
 export SERVICE_ACCOUNT := $(ENVIRONMENT)
+TAG = $(shell cat /dev/urandom | tr -dc 'a-z0-9' | fold -w 32 | head -n 1)
 
 export SENTRY_ORG := my-org
 
@@ -79,6 +80,9 @@ anotherhelp2:
 		echo "test_c is running!"
 		echo "test_c done"
 
+deploy:
+	ssh killy@killy.space "HOST=killy.space TAG=$(TAG) docker-compose --profile local_registry up -d"
+	ssh killy@killy.space "HOST=killy.space TAG=$(TAG) docker system prune -af"
 `
 
 func TestParsing(t *testing.T) {
@@ -109,6 +113,14 @@ func TestParsing(t *testing.T) {
 		t.FailNow()
 	}
 	if len(target.Steps) != 1 {
+		t.FailNow()
+	}
+
+	deploy, ok := file.Targets["deploy::0"]
+	if !ok {
+		t.FailNow()
+	}
+	if len(deploy.Steps) != 1 && len(deploy.Steps[0].GetShellCommands()) != 2 {
 		t.FailNow()
 	}
 }

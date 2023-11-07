@@ -22,10 +22,7 @@
             "program": "${workspaceFolder}/main.go",
             "args": [
                 "run",
-                "clean",
-                "windows",
-                "linux",
-                "mac"
+                "test",
             ]
         },
         {
@@ -53,6 +50,21 @@
                 "-o",
                 "production",
                 "production_test"
+            ]
+        },
+        {
+            "name": "Homeserver",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceFolder}/main.go",
+            "args": [
+                "-f",
+                "/home/killy/Code/homeserver/Supermake",
+                "-c",
+                "/home/killy/Code/homeserver",
+                "run",
+                "deploy"
             ]
         }
     ]

@@ -10,7 +10,7 @@ import (
 func parseDefaultEntrypoint(variables Variables) []string {
 	ep, ok := variables[".SHELL"]
 	if !ok {
-		return []string{"sh", "-ce"}
+		return []string{"sh", "-cex"}
 	}
 
 	return strings.Split(ep.Value(), " ")
@@ -23,8 +23,6 @@ func ParseInterpreterCommand(variables Variables, entrypoint, commands []string)
 	args := entrypoint[1:]
 
 	cmd := strings.Join(commands, "\n")
-	// cmd = strings.ReplaceAll(cmd, `"`, `\"`)
-	// cmd = strings.ReplaceAll(cmd, `!`, `\!`)
 	args = append(args, cmd)
 
 	return entrypoint[0], args

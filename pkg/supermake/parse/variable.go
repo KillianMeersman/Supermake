@@ -7,8 +7,9 @@ import (
 )
 
 // Replace every variable with the return value of f.
-// Supports nested variables, such that if X=A, Y=B, A-B=test, $(X-$(Y)) becomes 'test'.
-// Errors returned by f are progatated to the function return value.
+// Supports nested variables, such that variable references may be constructed out of variables themselves.
+// E.g. if X=A, Y=B, A-B=test, $($(X)-$(Y)) becomes 'test'.
+// Errors returned by f are propagated to the function return value.
 func ReplaceVariables(s string, f func(v string) (string, error)) (string, error) {
 	rootString := &strings.Builder{}
 	variableDataStack := datastructures.NewStack[*strings.Builder]()

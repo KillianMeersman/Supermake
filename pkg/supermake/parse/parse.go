@@ -14,7 +14,7 @@ import (
 
 var targetRegex = regexp.MustCompile(`^([a-zA-Z0-9-/_.@]+):(?: +(.*))?$`)
 var executorRegex = regexp.MustCompile(`^([a-zA-Z0-9]*?)@([a-zA-Z0-9-_:.$]+)( .*)?$`)
-var variableDeclarationRegex = regexp.MustCompile(`^(export +)?(.+?) *(=|:=|\?=) *(.*)$`)
+var variableDeclarationRegex = regexp.MustCompile(`^(export +)?(.+?) (=|:=|\?=) *(.*)$`)
 
 const COMMENT_CHARS = "#"
 
@@ -85,7 +85,7 @@ func (p *SuperMakeFileParser) cleanAndMapLines(cwd string) error {
 			continue
 		}
 
-		line, err := evaluateVariables(cwd, line, p.Variables)
+		line, err := evaluateLine(cwd, line, p.Variables)
 		if err != nil {
 			return err
 		}
@@ -348,7 +348,8 @@ func runShellScript(cwd, script string, variables supermake.Variables) ([]byte, 
 	return stdout.Bytes(), nil
 }
 
-func evaluateVariables(cwd, line string, variables supermake.Variables) (string, error) {
+// Evaluate a line so that any variables are filled in and shell calls are ran.
+func evaluateLine(cwd, line string, variables supermake.Variables) (string, error) {
 	line, err := ReplaceVariables(line, func(v string) (string, error) {
 		if strings.HasPrefix(v, "shell ") {
 			// Run shell command
@@ -401,7 +402,7 @@ func parseVariable(cwd, line string, variables map[string]*supermake.Variable) (
 	}
 
 	// Value
-	value, err := evaluateVariables(cwd, groups[4], variables)
+	value, err := evaluateLine(cwd, groups[4], variables)
 	if err != nil {
 		return nil, err
 	}
