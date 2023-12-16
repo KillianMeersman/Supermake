@@ -56,7 +56,7 @@ func getLineType(line string) LineType {
 	return COMMAND
 }
 
-// Build a map of cleaned lines and their indentation levels and class.
+// Build a map of cleaned lines, their indentation levels and token type.
 // Removes indentation characters as well as comments.
 func (p *SuperMakeFileParser) cleanAndMapLines(cwd string) error {
 	p.indent = make([]int, 0, len(p.rawLines))
@@ -91,7 +91,9 @@ func (p *SuperMakeFileParser) cleanAndMapLines(cwd string) error {
 		}
 
 		lineType := getLineType(line)
-		if lineType == VARIABLE {
+		if lineType == VARIABLE && indentation > 0 {
+			lineType = COMMAND
+		} else if lineType == VARIABLE && indentation == 0 {
 			variable, err := parseVariable(cwd, line, p.Variables)
 			if err != nil {
 				return fmt.Errorf("error on line %s: %s", line, err)
@@ -366,7 +368,7 @@ func evaluateLine(cwd, line string, variables supermake.Variables) (string, erro
 			} else if variable, ok := os.LookupEnv(v); ok {
 				return variable, nil
 			} else {
-				return "", fmt.Errorf("unknown variable for '%s': '%s'", line, v)
+				return "", fmt.Errorf("unknown variable for '%s': %s", line, v)
 			}
 		}
 	})

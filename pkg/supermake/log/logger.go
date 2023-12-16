@@ -58,6 +58,12 @@ type Logger struct {
 	Formatter LogFormatter
 }
 
+var defaultLogger = NewLogger(INFO, ShellColoredLevels, os.Stdout, os.Stderr)
+
+func DefaultLogger() *Logger {
+	return defaultLogger
+}
+
 func NewLogger(level LogLevel, formatter LogFormatter, stdout, stderr io.Writer) *Logger {
 	return &Logger{
 		fields:    make(map[string]string),

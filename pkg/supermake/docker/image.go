@@ -7,9 +7,12 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/KillianMeersman/Supermake/pkg/supermake/log"
 	"github.com/docker/docker/api/types"
 	"github.com/moby/moby/client"
 )
+
+const defaultImageRegistry = "docker.io/library/"
 
 var imagePulls = sync.Map{}
 
@@ -53,6 +56,7 @@ func ParseImageURL(url string) (*ImageURL, error) {
 }
 
 func PullImage(ctx context.Context, client *client.Client, url *ImageURL) error {
+	log.DefaultLogger().Info("pulling image", "image", url.String())
 	output, err := client.ImagePull(ctx, url.String(), types.ImagePullOptions{
 		Platform: "linux/amd64",
 		All:      false,
@@ -66,6 +70,7 @@ func PullImage(ctx context.Context, client *client.Client, url *ImageURL) error 
 	}
 	defer output.Close()
 
+	log.DefaultLogger().Info("pulled image", "image", url.String())
 	return nil
 }
 
@@ -74,6 +79,8 @@ func SearchLocalImages(ctx context.Context, client *client.Client, query string)
 	if err != nil {
 		return "", err
 	}
+
+	query = strings.TrimPrefix(query, defaultImageRegistry)
 
 	for _, image := range images {
 		for _, tag := range image.RepoTags {

@@ -1,19 +1,21 @@
 # Supermake
 ## Description
-Supermake is a variant of Make that aims to be a modern CI pipelining tool. Supermake can be ran locally as well as on remote machines.
+Supermake is modern software build and CI/CD pipelining tool, inspired by Make. It offers builtin parallelism and container support, all using the Makefile format we all know and love.
 
 ### Features
-1. Automatic parallelisation.
-2. Nested targets.
-3. Easy containerization of recipes.
-4. Easily switch between interpreters for different recipes or even within the same recipe.
-5. Compatible with most existing Makefiles (given some easy changes).
+1. Automatic parallelisation of targets.
+2. Nested targets, allowing you to group targets.
+3. Run your recipes (or parts thereof) in containers or different shells/interpreters.
+5. Make-like syntax. Making it compatible with most existing Makefiles, give or take a few tweaks.
 
+
+### Limitations
+1. No interactive shells (yet). Due to the parallel nature of Supermake, it's not possible to attach stdin to the processes executing different targets.
 
 ## User guide
-This user guide will guide you through the Supermake featureset by starting with a simple, existing makefile which we'll augment with Supermake features.
+This user guide will guide you through the Supermake featureset by starting with a simple, existing Makefile, which we'll augment with Supermake features.
 
-Supermake uses the target syntax you're already familiar with, our Makefile starts off as follows:
+Supermake uses the Make-like syntax you're already familiar with. Our Makefile starts off as follows:
 
 ```Makefile
 IMAGE_TAG ?= latest

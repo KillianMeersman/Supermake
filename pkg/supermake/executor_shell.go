@@ -54,7 +54,7 @@ func startAndStreamOutput(ctx context.Context, command string, args []string, va
 	}()
 
 	go func() {
-		log.StreamReaderNewLines(logger.Error, stderr)
+		log.StreamReaderNewLines(logger.Info, stderr)
 		wg.Done()
 	}()
 

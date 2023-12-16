@@ -10,7 +10,7 @@ import (
 func parseDefaultEntrypoint(variables Variables) []string {
 	ep, ok := variables[".SHELL"]
 	if !ok {
-		return []string{"sh", "-cex"}
+		return []string{"sh", "-ce"}
 	}
 
 	return strings.Split(ep.Value(), " ")
