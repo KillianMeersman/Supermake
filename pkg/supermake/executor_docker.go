@@ -88,7 +88,8 @@ func (d *DockerEnvironment) Execute(ctx context.Context, execCtx ExecutorContext
 		return err
 	}
 	defer logStream.Close()
-	log.StreamReaderNewLines(execCtx.Logger.Info, logStream)
+	logger := execCtx.Logger.With("container", imageURL.String())
+	log.StreamReaderNewLines(logger.Info, logStream)
 
 	waitChan, errChan := mobyClient.ContainerWait(ctx, dockerContainer.ID, container.WaitConditionNotRunning)
 	select {
@@ -102,9 +103,9 @@ func (d *DockerEnvironment) Execute(ctx context.Context, execCtx ExecutorContext
 		if statusCode != 0 {
 			logs, err := docker.GetContainerLogs(ctx, mobyClient, dockerContainer.ID)
 			if err != nil {
-				execCtx.Logger.Panic(err.Error())
+				logger.Panic(err.Error())
 			}
-			execCtx.Logger.Error(string(logs))
+			logger.Error(string(logs))
 			return fmt.Errorf("container returned non-zero exit code: %d", statusCode)
 		}
 	case err := <-errChan:

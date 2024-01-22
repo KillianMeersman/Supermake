@@ -9,12 +9,16 @@ import (
 
 func ShellColoredLevels(level LogLevel, message string, fields map[string]string) []byte {
 	target := "root"
+	container := "@local"
 
 	fieldStrings := make([]string, 0, len(fields))
 	for k, v := range fields {
-		if k == "target" {
+		switch k {
+		case "target":
 			target = v
-		} else {
+		case "container":
+			container = fmt.Sprintf("@%s", v)
+		default:
 			fieldStrings = append(fieldStrings, fmt.Sprintf("%s=%s", k, v))
 		}
 	}
@@ -47,7 +51,7 @@ func ShellColoredLevels(level LogLevel, message string, fields map[string]string
 		levelFormatting = []ShellFormatting{FgHiMagenta, Bold}
 	}
 
-	return []byte(TabulateRow().Field(levelStr, 9, levelFormatting...).Field(target, 25).Field("|", 1).Field(message, -1).Field(fieldString, -1).String())
+	return []byte(TabulateRow().Field(levelStr, 5, levelFormatting...).Field(target, 20).Field(container, len(container)).Field("|", 1).Field(message, -1).Field(fieldString, -1).String())
 }
 
 type Logger struct {
