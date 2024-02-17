@@ -4,7 +4,7 @@ go 1.21
 
 require (
 	github.com/docker/docker v24.0.7+incompatible
-	github.com/moby/moby v24.0.2+incompatible
+	github.com/moby/moby v24.0.9+incompatible
 	github.com/opencontainers/image-spec v1.0.2
 	github.com/spf13/cobra v1.7.0
 )
