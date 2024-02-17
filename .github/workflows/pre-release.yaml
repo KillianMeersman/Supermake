@@ -1,0 +1,78 @@
+name: prerelease-supermake
+run-name: Pre-release ${{ github.ref_name }}
+on:
+    push:
+        tags:
+            - v*.*.*-pre
+
+jobs:
+  build_windows:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+            go-version: '^1.21.6'
+      - run: |
+            GOOS=windows GOARCH=amd64 go build -buildvcs=false -o bin/supermake_windows_64.exe
+            GOOS=windows GOARCH=386 go build -buildvcs=false -o bin/supermake_windows_32.exe
+      - name: 'Upload build artifacts'
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-builds
+          path: bin/*
+          retention-days: 3
+
+  build_mac:
+      runs-on: ubuntu-latest
+      steps:
+        - uses: actions/checkout@v4
+        - uses: actions/setup-go@v5
+          with:
+            go-version: '^1.21.6'
+        - run: |
+           GOOS=darwin GOARCH=amd64 go build -buildvcs=false -o bin/supermake_darwin_64
+        - name: 'Upload build artifacts'
+          uses: actions/upload-artifact@v4
+          with:
+            name: mac-builds
+            path: bin/*
+            retention-days: 3
+
+  build_linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '^1.21.6'
+      - run: |
+          GOOS=linux GOARCH=amd64 go build -buildvcs=false -o bin/supermake_linux_64
+          GOOS=linux GOARCH=386 go build -buildvcs=false -o bin/supermake_linux_32
+      - name: 'Upload build artifacts'
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-builds
+          path: bin/*
+          retention-days: 3
+      
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    needs:
+      - build_windows
+      - build_mac
+      - build_linux
+    steps:
+      - name: Download all workflow run artifacts
+        uses: actions/download-artifact@v4
+      - uses: ncipollo/release-action@v1
+        with:
+          artifacts: "windows-builds/*,mac-builds/*,linux-builds/*"
+          allowUpdates: true
+          makeLatest: false
+          prerelease: true
+          replacesArtifacts: true
+          artifactErrorsFailBuild: true
+          generateReleaseNotes: true
