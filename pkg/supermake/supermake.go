@@ -18,7 +18,7 @@ type SupermakeFile struct {
 }
 
 func (s *SupermakeFile) Run(ctx context.Context, scheduler Scheduler, cwd string, targets ...string) error {
-	logger := log.NewLogger(log.INFO, log.ShellColoredLevels, os.Stdout, os.Stderr)
+	logger := log.NewLogger("root", log.GetLogLevel(), log.ShellColoredLevels, os.Stdout, os.Stderr)
 	execCtx := ExecutorContext{
 		EnvVars:       s.Variables,
 		Targets:       s.Targets,

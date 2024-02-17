@@ -23,13 +23,13 @@ The variable identifier may be composed of any character but cannot include spac
 The value may be any character, except spaces. Variable lines are expanded before being evaluated, allowing you to reference other variables defined before the current line.
 
 ### Using variables
-You can reference variables on all lines using the `$(IDENTIFIER)` syntax. e.g.
+You can reference variables on all lines using the `${{ IDENTIFIER }}` syntax. e.g.
 ```Makefile
 MESSAGE = test
-export EXPORTED_MESSAGE = $(MESSAGE)-exported
+export EXPORTED_MESSAGE = ${{ MESSAGE }}-exported
 
 expanded:
-	echo $(MESSAGE) # Prints 'test'
+	echo ${{ MESSAGE }} # Prints 'test'
 
 not_expanded:
 	echo ${MESSAGE} # This will not work, as the MESSAGE variable is not exported, the shell will not interpolate it.
@@ -46,7 +46,7 @@ VERSION = v1
 MESSAGE_v1 = Hello world
 
 recursive_expansion:
-    echo $(MESSAGE_$(VERSION)) # Prints 'Hello world'
+    echo ${{MESSAGE_${{VERSION}}}} # Prints 'Hello world'
 ```
 
 ## Targets

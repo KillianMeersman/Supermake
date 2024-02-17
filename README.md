@@ -33,9 +33,12 @@ test:
 
 As you can see, we have three targets (.ONESHELL is a "pseudo-target", we'll come back to that) of which two have recipes (the actual scripts under the target names).
 
-### First, a note on Supermake recipes
-Unlike the default Make behaviour, which will pass every line of your recipe into a new shell. Supermake passes the whole recipe to the chosen (or default) interpreter. This functionality can be replicated in Make by defining the `.ONESHELL` target. We'll remove this target in the following steps as it's now redundant.
+### First, a note on important differences
+Early on in Supermake's development, I decided to change the variable syntax from `$(NAME)` to `${{NAME}}`. This has the following advantages:
+1. Does not clash with shell variables & subshells.
+2. Allows spacing between the brackets and identifier, potentially improving readability.
 
+Unlike the default Make behaviour, which will pass every line of your recipe into a new shell. Supermake passes the whole recipe to the chosen (or default) interpreter. This functionality can be replicated in Make by defining the `.ONESHELL` target. We'll remove this target in the following steps as it's now redundant.
 It's for this reason that the default shell in Supermake is `sh -ce`, the `-e` flag makes the recipe fail when a line returns a non-zero exit code, as you would expect in Make. Talking about shells...
 
 ### Using different executors
@@ -45,7 +48,7 @@ It can be useful to run certain steps of a recipe inside a certain shell, interp
 To switch to a different shell or interpreter, with optional arguments (e.g. `-ce`), use the following notation:
 
 ```
-[name]@local [entrypoint]
+@local [entrypoint]
 ```
 
 Note that such executors always begin with `@local`, followed by the entrypoint. Some examples:
@@ -59,7 +62,7 @@ Note that such executors always begin with `@local`, followed by the entrypoint.
 Supermake can also start a container, mount the working directory into it and then run the recipe with the given entrypoint **inside** the container. Use the following notation to do so:
 
 ```
-[name]@image:[tag] [entrypoint]
+@image:[tag] [entrypoint]
 ```
 
 These executors always begin with the image url, followed by an optional tag (otherwise `latest`) and an optional entrypoint (see chapter above).
@@ -79,10 +82,10 @@ Please note that all containers:
 Moving on with our example. Let's augment our Makefile with executors so that our testing step always runs inside a Python container.
 ```Makefile
 IMAGE_TAG ?= latest
-IMAGE_URL = "docker.com/myimage:$(IMAGE_TAG)"
+IMAGE_URL = "docker.com/myimage:${{IMAGE_TAG}}"
 
 build: test
-	docker build -t $(IMAGE_URL) .
+	docker build -t ${{IMAGE_URL}} .
 
 test:
 	@python:3.11 bash -ce
@@ -102,10 +105,10 @@ Supermake targets run in parallel whenever possible. They may also be nested to 
 Let's speed up our testing step by splitting it up into three parallel testing runs. In this example, our end-to-end tests will also wait for both unit and integrations tests to pass first.
 ```Makefile
 IMAGE_TAG ?= latest
-IMAGE_URL = "docker.com/myimage:$(IMAGE_TAG)"
+IMAGE_URL = "docker.com/myimage:${{ IMAGE_TAG }}"
 
 build: test
-	docker build -t $(IMAGE_URL) .
+	docker build -t ${{ IMAGE_URL }} .
 
 test:
 	echo 'Starting tests'
@@ -138,7 +141,7 @@ By default, Supermake runs all targets locally. Ignoring runner directives.
 When using distributed pipelines, targets can be ran on specific runners via an environment-like directive on the target line. It takes the following form:
 
 ```
-[name]@[node]: [dependencies...]
+[name][@node]: [dependencies...]
 ```
 
 When runners are registered, they are given groups depending on their os & capabilities. Many runners can share the same group(s). It is up individual choice on how to establish a naming scheme.
@@ -147,10 +150,10 @@ Let's make sure our build step only runs on linux runners with the docker driver
 
 ```Makefile
 IMAGE_TAG ?= latest
-IMAGE_URL = "docker.com/myimage:$(IMAGE_TAG)"
+IMAGE_URL = "docker.com/myimage:${{ IMAGE_TAG }}"
 
 build@debian-docker: test
-	docker build -t $(IMAGE_URL) .
+	docker build -t ${{ IMAGE_URL }} .
 
 test:
 	echo 'Starting tests'

@@ -7,54 +7,8 @@ import (
 	"strings"
 )
 
-func ShellColoredLevels(level LogLevel, message string, fields map[string]string) []byte {
-	target := "root"
-	container := "@local"
-
-	fieldStrings := make([]string, 0, len(fields))
-	for k, v := range fields {
-		switch k {
-		case "target":
-			target = v
-		case "container":
-			container = fmt.Sprintf("@%s", v)
-		default:
-			fieldStrings = append(fieldStrings, fmt.Sprintf("%s=%s", k, v))
-		}
-	}
-
-	fieldString := strings.Join(fieldStrings, ", ")
-	if len(fieldString) > 0 {
-		fieldString = "[" + fieldString + "]"
-	}
-
-	levelStr := "???"
-	levelFormatting := []ShellFormatting{Reset}
-	switch level {
-	case TRACE:
-		levelStr = "TRACE"
-		levelFormatting = []ShellFormatting{FgWhite, Faint}
-	case DEBUG:
-		levelStr = "DEBUG"
-		levelFormatting = []ShellFormatting{FgWhite, Faint}
-	case INFO:
-		levelStr = "INFO"
-		levelFormatting = []ShellFormatting{FgBlue}
-	case WARNING:
-		levelStr = "WARNING"
-		levelFormatting = []ShellFormatting{FgYellow, Bold}
-	case ERROR:
-		levelStr = "ERROR"
-		levelFormatting = []ShellFormatting{FgHiRed, Bold}
-	case FATAL:
-		levelStr = "FATAL"
-		levelFormatting = []ShellFormatting{FgHiMagenta, Bold}
-	}
-
-	return []byte(TabulateRow().Field(levelStr, 5, levelFormatting...).Field(target, 20).Field(container, len(container)).Field("|", 1).Field(message, -1).Field(fieldString, -1).String())
-}
-
 type Logger struct {
+	name      string
 	fields    map[string]string
 	stdout    io.Writer
 	stderr    io.Writer
@@ -62,14 +16,55 @@ type Logger struct {
 	Formatter LogFormatter
 }
 
-var defaultLogger = NewLogger(INFO, ShellColoredLevels, os.Stdout, os.Stderr)
+func GetLogLevel() LogLevel {
+	level, exists := os.LookupEnv("LOG_LEVEL")
+	if !exists {
+		return INFO
+	}
+
+	switch strings.ToLower(level) {
+	case "trace":
+		return TRACE
+	case "debug":
+		return DEBUG
+	case "info":
+		return INFO
+	case "warn", "warning":
+		return WARNING
+	case "error":
+		return ERROR
+	case "fatal":
+		return FATAL
+	default:
+		DefaultLogger().Error(fmt.Sprintf("invalid LOG_LEVEL environment variable: '%s'. Defaulting to INFO.", level))
+		return INFO
+	}
+}
+
+var defaultLogger = NewLogger("", INFO, ShellColoredLevels, os.Stdout, os.Stderr)
+
+func init() {
+	defaultLogger.Level = GetLogLevel()
+}
 
 func DefaultLogger() *Logger {
 	return defaultLogger
 }
 
-func NewLogger(level LogLevel, formatter LogFormatter, stdout, stderr io.Writer) *Logger {
+func NamedLogger(name string) *Logger {
 	return &Logger{
+		name:      name,
+		fields:    make(map[string]string),
+		Level:     GetLogLevel(),
+		Formatter: ShellColoredLevels,
+		stdout:    os.Stdout,
+		stderr:    os.Stderr,
+	}
+}
+
+func NewLogger(name string, level LogLevel, formatter LogFormatter, stdout, stderr io.Writer) *Logger {
+	return &Logger{
+		name:      name,
 		fields:    make(map[string]string),
 		Level:     level,
 		Formatter: formatter,

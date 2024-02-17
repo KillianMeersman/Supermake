@@ -9,11 +9,12 @@ import (
 	"strings"
 
 	"github.com/KillianMeersman/Supermake/pkg/supermake"
+	"github.com/KillianMeersman/Supermake/pkg/supermake/log"
 	"github.com/KillianMeersman/Supermake/pkg/supermake/util"
 )
 
 var targetRegex = regexp.MustCompile(`^([a-zA-Z0-9-/_.@]+):(?: +(.*))?$`)
-var executorRegex = regexp.MustCompile(`^([a-zA-Z0-9]*?)@([a-zA-Z0-9-_:.$]+)( .*)?$`)
+var executorRegex = regexp.MustCompile(`^([a-zA-Z0-9]*?)@([a-zA-Z0-9-_:./]+)( .*)?$`)
 var variableDeclarationRegex = regexp.MustCompile(`^(export +)?(.+?) (=|:=|\?=) *(.*)$`)
 
 const COMMENT_CHARS = "#"
@@ -213,9 +214,12 @@ func (p *SuperMakeFileParser) parseCommandBlock(variables supermake.Variables, d
 	commands := make(supermake.CommandGroup, 0, 10)
 
 	name := defaultName
+	log.NamedLogger("parse").Trace("entering command block", "line", p.lines[p.i])
 
 	// Parse custom executor if required
 	if p.lineTypes[p.i] == EXECUTOR {
+		log.NamedLogger("parse").Trace("using custom executor", "line", p.lines[p.i])
+
 		line := p.lines[p.i]
 		groups := executorRegex.FindStringSubmatch(line)
 
@@ -231,10 +235,12 @@ func (p *SuperMakeFileParser) parseCommandBlock(variables supermake.Variables, d
 		}
 
 		if image == "local" {
+			log.DefaultLogger().Trace("local executor detected")
 			executor = &supermake.LocalEnvironment{
 				Entrypoint: entrypoint,
 			}
 		} else {
+			log.DefaultLogger().Trace("container executor detected", "container", image)
 			executor = &supermake.DockerEnvironment{
 				Image:      image,
 				Entrypoint: entrypoint,

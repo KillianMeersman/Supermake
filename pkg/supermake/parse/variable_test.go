@@ -7,7 +7,7 @@ import (
 )
 
 func TestVariableSubstitution(t *testing.T) {
-	test := "This is a $(OPERATION) for $(WORKLOAD) $(VERSION) $(WORKLOAD-$(VERSION))"
+	test := "This is a ${{ OPERATION }} for ${{WORKLOAD}} ${{VERSION}} ${{WORKLOAD-${{VERSION}}}}"
 	vars := map[string]string{
 		"OPERATION":   "test",
 		"WORKLOAD":    "replacevars",
