@@ -4,7 +4,7 @@ run: build
 build: test
 	go mod tidy
 	go generate ./...
-	go build -o bin/supermake
+	go build -mod vendor -o bin/supermake
 
 test:
 	go test -v ./...
