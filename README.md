@@ -13,6 +13,26 @@ It offers builtin parallelism and container support, all using the a Makefile-li
 3. Run (part of) your recipes in different shells, interpreters and even containers 🐳.
 5. Make-like syntax. Re-purpose your Makefiles with a few tweaks.
 
+## Installation
+Grab a pre-built executable from the [latest release](https://github.com/KillianMeersman/Supermake/releases/latest/) or build it yourself.
+```bash
+git clone git@github.com:KillianMeersman/Supermake.git
+cd Supermake
+make install
+```
+
+## Usage
+Once installed, it's as simple as running
+```bash
+smake run <target>
+```
+
+If you want to find out more, you can use the `help` command and/or flag.
+```bash
+smake help
+smake run --help
+```
+
 ## Example
 ```Makefile
 TAG ?= latest  # Inherit from environment variable, using 'latest' as fallback
