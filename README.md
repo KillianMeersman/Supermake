@@ -9,7 +9,7 @@ It offers builtin parallelism and container support, all using the a Makefile-li
 
 ## Features 💡
 1. Automatic parallelisation of targets whenever possible, increasing speed by utilizing all CPU cores.
-2. Nested targets, increasing readability.
+2. Allows nested targets, increasing readability.
 3. Run (part of) your recipes in different shells, interpreters and even containers 🐳.
 5. Make-like syntax. Re-purpose your Makefiles with a few tweaks.
 
