@@ -44,4 +44,4 @@ test: build::ci  # Wait until the ci subtarget is done, both subtargets will run
 
 
 ## Further reading
-Check out out `USERGUIDE.md` for a quickstart or `DOCS.md` for a deep-dive into Supermake.
+Check out out [the user guide](USERGUIDE.md) for a quickstart or [the docs](DOCS.md) for a deep-dive into Supermake.
