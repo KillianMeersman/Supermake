@@ -5,6 +5,7 @@ import (
 	"io"
 
 	"github.com/docker/docker/api/types"
+	"github.com/docker/docker/api/types/container"
 	"github.com/moby/moby/client"
 )
 
@@ -20,10 +21,11 @@ func GetContainerLogs(ctx context.Context, client *client.Client, container stri
 	return io.ReadAll(logReader)
 }
 
-func StreamContainerLogs(ctx context.Context, client *client.Client, container string) (io.ReadCloser, error) {
-	return client.ContainerLogs(ctx, container, types.ContainerLogsOptions{
+func StreamContainerLogs(ctx context.Context, client *client.Client, containerID string) (io.ReadCloser, error) {
+	return client.ContainerLogs(ctx, containerID, container.LogsOptions{
 		ShowStdout: true,
 		ShowStderr: true,
+		Follow:     true,
 	})
 }
 

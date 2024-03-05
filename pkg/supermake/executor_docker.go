@@ -7,7 +7,6 @@ import (
 
 	"github.com/KillianMeersman/Supermake/pkg/supermake/docker"
 	"github.com/KillianMeersman/Supermake/pkg/supermake/log"
-	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/api/types/network"
@@ -53,7 +52,7 @@ func (d *DockerEnvironment) Execute(ctx context.Context, execCtx ExecutorContext
 		Entrypoint: []string{entrypoint},
 		Cmd:        cmd,
 		WorkingDir: dockerWorkingDir,
-		Tty:        true,
+		Tty:        false,
 		Env:        execCtx.EnvVars.EnvStrings(),
 		User:       fmt.Sprintf("%s:%s", user.Uid, user.Gid),
 	}
@@ -78,7 +77,7 @@ func (d *DockerEnvironment) Execute(ctx context.Context, execCtx ExecutorContext
 	defer docker.RemoveContainer(ctx, mobyClient, dockerContainer.ID)
 
 	execCtx.Logger.Debug("starting container", "image", imageURL.String())
-	err = mobyClient.ContainerStart(ctx, dockerContainer.ID, types.ContainerStartOptions{})
+	err = mobyClient.ContainerStart(ctx, dockerContainer.ID, container.StartOptions{})
 	if err != nil {
 		return err
 	}
@@ -89,7 +88,7 @@ func (d *DockerEnvironment) Execute(ctx context.Context, execCtx ExecutorContext
 	}
 	defer logStream.Close()
 	logger := execCtx.Logger.With("container", imageURL.String())
-	log.StreamReaderNewLines(logger.Info, logStream)
+	go log.StreamReaderNewLines(logger.Info, logStream)
 
 	waitChan, errChan := mobyClient.ContainerWait(ctx, dockerContainer.ID, container.WaitConditionNotRunning)
 	select {
@@ -101,11 +100,6 @@ func (d *DockerEnvironment) Execute(ctx context.Context, execCtx ExecutorContext
 
 		statusCode := wait.StatusCode
 		if statusCode != 0 {
-			logs, err := docker.GetContainerLogs(ctx, mobyClient, dockerContainer.ID)
-			if err != nil {
-				logger.Panic(err.Error())
-			}
-			logger.Error(string(logs))
 			return fmt.Errorf("container returned non-zero exit code: %d", statusCode)
 		}
 	case err := <-errChan:
