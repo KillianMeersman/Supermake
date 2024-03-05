@@ -5,6 +5,7 @@ if [ $# -lt 1 ]; then
     exit 1
 fi
 
+
 NEW_VERSION="$1"
 
 git fetch --tags
@@ -35,4 +36,17 @@ echo "Latest release tag is '${LATEST_RELEASE_TAG}'"
 NEW_RELEASE="v${NEW_RELEASE_MAJOR}.${NEW_RELEASE_MINOR}.${NEW_RELEASE_PATCH}"
 echo "Creating release '${NEW_RELEASE}'"
 
-gh release create --repo=KillianMeersman/Supermake "${NEW_RELEASE}" --generate-notes
+TAG_MESSAGE_FILE=$(mktemp)
+echo "Version ${NEW_RELEASE_MAJOR}.${NEW_RELEASE_MINOR}.${NEW_RELEASE_PATCH}" > ${TAG_MESSAGE_FILE}
+${EDITOR} ${TAG_MESSAGE_FILE}
+
+git tag -a ${NEW_RELEASE} -F ${TAG_MESSAGE_FILE}
+
+while true; do
+    read -p "Release tag created, push, delete or keep? [p/d/k]: " choice
+    case $choice in
+        [Pp]*) git push origin ${NEW_RELEASE} ; break ;;
+        [Dd]*) git tag -d ${NEW_RELEASE} ; break ;;
+        [Kk]*) break ;;
+    esac
+done
