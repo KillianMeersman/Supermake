@@ -140,6 +140,11 @@ func (p *SuperMakeFileParser) Parse(cwd string) (*supermake.SupermakeFile, error
 		return nil, err
 	}
 
+	log.DefaultLogger().Debug("parsed Supermake file")
+	for _, target := range targets {
+		log.DefaultLogger().Debug(fmt.Sprintf("target %s -> %s", target.FQN(), strings.Join(target.Dependencies, ", ")))
+	}
+
 	return &supermake.SupermakeFile{
 		Targets:   targets,
 		Variables: p.Variables,
@@ -418,7 +423,7 @@ func parseVariable(cwd, line string, variables map[string]*supermake.Variable) (
 	return supermake.NewVariable(identifier, evaluationType, export, value), nil
 }
 
-func ParseSupermakeFileV2(cwd, path string) (*supermake.SupermakeFile, error) {
+func ParseSupermakeFile(cwd, path string) (*supermake.SupermakeFile, error) {
 	dataBytes, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err

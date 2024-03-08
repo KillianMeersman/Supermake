@@ -44,7 +44,7 @@ var run = &cobra.Command{
 			cancel()
 		}()
 
-		file, err := parse.ParseSupermakeFileV2(cwd, file)
+		file, err := parse.ParseSupermakeFile(cwd, file)
 		if err != nil {
 			log.Fatal(err)
 		}

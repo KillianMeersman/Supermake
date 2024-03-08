@@ -32,3 +32,35 @@ func TestContainerLogs(t *testing.T) {
 	scheduler := supermake.NewLocalScheduler()
 	smakeFile.Run(ctx, scheduler, cwd, "test")
 }
+
+func TestNestedTargets(t *testing.T) {
+	smakeFileData := `
+	a:
+		b:
+			b1:
+				echo 'B1'
+
+			b2:
+				echo 'B2'
+		c:
+			c1:
+				echo 'C1'
+
+		d:
+			echo 'D'
+	`
+
+	ctx := context.Background()
+	cwd, err := os.Getwd()
+	if err != nil {
+		t.Error(err)
+	}
+
+	smakeFile, err := parse.ParseSupermakeString(cwd, smakeFileData)
+	if err != nil {
+		t.Error(err)
+	}
+
+	scheduler := supermake.NewLocalScheduler()
+	smakeFile.Run(ctx, scheduler, cwd, "a")
+}
