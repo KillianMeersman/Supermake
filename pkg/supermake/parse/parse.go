@@ -290,7 +290,7 @@ func (p *SuperMakeFileParser) parseTarget(variables supermake.Variables, targets
 		rawDeps := strings.Split(headerParts[1], " ")
 		for _, dep := range rawDeps {
 			if len(dep) > 0 {
-				dependencies = append(dependencies, getNestedTargetName(parent, strings.TrimSpace(dep)))
+				dependencies = append(dependencies, strings.TrimSpace(dep))
 			}
 		}
 	}

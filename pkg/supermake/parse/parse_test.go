@@ -68,7 +68,7 @@ anotherhelp2:
 	@alpine:3 sh -c
 	echo "hello $NAMESPACE!"
 
-	test_a: test_b
+	test_a: anotherhelp2::test_b
 		echo "test_a is running!"
 		echo "test_a done"
 
