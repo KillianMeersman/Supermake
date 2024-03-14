@@ -2,6 +2,7 @@ package parse
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -13,7 +14,7 @@ import (
 	"github.com/KillianMeersman/Supermake/pkg/supermake/util"
 )
 
-var targetRegex = regexp.MustCompile(`^([a-zA-Z0-9-/_.@]+):(?: +(.*))?$`)
+var targetRegex = regexp.MustCompile(`^([a-zA-Z0-9-\/_.@]+)(\(.*\))?:(?: +(.*))?$`)
 var executorRegex = regexp.MustCompile(`^([a-zA-Z0-9]*?)@([a-zA-Z0-9-_:./]+)( .*)?$`)
 var variableDeclarationRegex = regexp.MustCompile(`^(export +)?(.+?) (=|:=|\?=) *(.*)$`)
 
@@ -266,16 +267,22 @@ func (p *SuperMakeFileParser) parseCommandBlock(variables supermake.Variables, d
 	return executor, commands, name, nil
 }
 
-// Parse a target.
-// Assumes the target declaration is the first line.
-func (p *SuperMakeFileParser) parseTarget(variables supermake.Variables, targets map[string]*supermake.Target, parent string, deps []string) (*supermake.Target, error) {
-	headerParts := strings.SplitN(p.lines[p.i], ":", 2)
+type targetData struct {
+	Name         string
+	Node         string
+	Parameters   []string
+	Dependencies []string
+}
 
-	// Name & Node
-	nameParts := strings.SplitN(headerParts[0], "@", 2)
+func parseTargetDefinition(line, parent string) (*targetData, error) {
+	groups := targetRegex.FindStringSubmatch(line)
+	if groups == nil {
+		return nil, errors.New("invalid target line")
+	}
+
+	nameParts := strings.SplitN(groups[1], "@", 2)
 	name := strings.TrimSpace(nameParts[0])
-
-	if parent != "" {
+	if len(parent) > 0 {
 		name = fmt.Sprintf("%s::%s", parent, name)
 	}
 
@@ -284,17 +291,38 @@ func (p *SuperMakeFileParser) parseTarget(variables supermake.Variables, targets
 		node = strings.TrimSpace(nameParts[1])
 	}
 
-	// Dependencies
-	dependencies := make([]string, 0)
-	if len(headerParts) > 1 {
-		rawDeps := strings.Split(headerParts[1], " ")
-		for _, dep := range rawDeps {
-			if len(dep) > 0 {
-				dependencies = append(dependencies, strings.TrimSpace(dep))
-			}
+	parameters := make([]string, 0)
+	for _, param := range strings.Split(groups[2], ",") {
+		if len(param) > 0 {
+			parameters = append(parameters, strings.TrimSpace(param))
 		}
 	}
-	dependencies = append(dependencies, deps...)
+
+	dependencies := make([]string, 0)
+	for _, dependency := range strings.Split(groups[3], " ") {
+		if len(dependency) > 0 {
+			dependencies = append(dependencies, strings.TrimSpace(dependency))
+		}
+	}
+
+	return &targetData{
+		Name:         name,
+		Node:         node,
+		Parameters:   parameters,
+		Dependencies: dependencies,
+	}, nil
+}
+
+// Parse a target.
+// Assumes the target declaration is the first line.
+func (p *SuperMakeFileParser) parseTarget(variables supermake.Variables, targets map[string]*supermake.Target, parent string, deps []string) (*supermake.Target, error) {
+	line := p.lines[p.i]
+
+	data, err := parseTargetDefinition(line, parent)
+	if err != nil {
+		return nil, err
+	}
+	data.Dependencies = append(data.Dependencies, deps...)
 
 	// Keeps track of consecutive targets, so they do not depend on eachother.
 	blockDependencies := make([]string, 0)
@@ -306,7 +334,7 @@ func (p *SuperMakeFileParser) parseTarget(variables supermake.Variables, targets
 	for p.i < end {
 		// Subtargets
 		if p.lineTypes[p.i] == TARGET {
-			subTarget, err := p.parseTarget(variables, targets, name, dependencies)
+			subTarget, err := p.parseTarget(variables, targets, data.Name, data.Dependencies)
 			if err != nil {
 				return nil, err
 			}
@@ -314,7 +342,7 @@ func (p *SuperMakeFileParser) parseTarget(variables supermake.Variables, targets
 			targets[subTarget.FQN()] = subTarget
 			blockDependencies = append(blockDependencies, subTarget.FQN())
 		} else if p.lineTypes[p.i] == EXECUTOR || p.lineTypes[p.i] == COMMAND {
-			dependencies = append(dependencies, blockDependencies...)
+			data.Dependencies = append(data.Dependencies, blockDependencies...)
 			blockDependencies = make([]string, 0)
 
 			executor, commands, blockName, err := p.parseCommandBlock(variables, fmt.Sprintf("%d", step))
@@ -322,19 +350,19 @@ func (p *SuperMakeFileParser) parseTarget(variables supermake.Variables, targets
 				return nil, err
 			}
 
-			target := supermake.NewTarget(fmt.Sprintf("%s::%s", name, blockName), node, []string{}, executor, []supermake.Command{commands}, variables)
-			target.Dependencies = append(target.Dependencies, dependencies...)
+			target := supermake.NewTarget(fmt.Sprintf("%s::%s", data.Name, blockName), data.Node, []string{}, executor, []supermake.Command{commands}, variables)
+			target.Dependencies = append(target.Dependencies, data.Dependencies...)
 			targets[target.FQN()] = target
-			dependencies = append(dependencies, target.FQN())
+			data.Dependencies = append(data.Dependencies, target.FQN())
 			step++
 		} else {
 			p.i++
 		}
 	}
-	dependencies = append(dependencies, blockDependencies...)
+	data.Dependencies = append(data.Dependencies, blockDependencies...)
 	p.i = end
 
-	target := supermake.NewTarget(name, node, dependencies, supermake.NewLocalEnvironment(), []supermake.Command{}, variables)
+	target := supermake.NewTarget(data.Name, data.Node, data.Dependencies, supermake.NewLocalEnvironment(), []supermake.Command{}, variables)
 	targets[target.FQN()] = target
 
 	return target, nil

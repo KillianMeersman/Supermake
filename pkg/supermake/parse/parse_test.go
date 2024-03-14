@@ -68,7 +68,7 @@ anotherhelp2:
 	@alpine:3 sh -c
 	echo "hello $NAMESPACE!"
 
-	test_a: anotherhelp2::test_b
+	test_a(test): anotherhelp2::test_b
 		echo "test_a is running!"
 		echo "test_a done"
 
@@ -101,11 +101,11 @@ func TestParsing(t *testing.T) {
 	wantedTargets := []string{"anotherhelp2::test_b", "anotherhelp2::0", "anotherhelp2::1", "anotherhelp2::2", "anotherhelp2::3", "anotherhelp2::4", "anotherhelp2::test_a::0"}
 	for i, dep := range target.Dependencies {
 		if dep != wantedTargets[i] {
-			t.Fail()
+			t.Errorf("wanted dependency %s but got %s", wantedTargets[i], dep)
 		}
 	}
 	if len(target.Steps) != 0 {
-		t.FailNow()
+		t.Errorf("wanted 0 steps but got %d", len(target.Steps))
 	}
 
 	target, ok = file.Targets["anotherhelp2::test_a::0"]
