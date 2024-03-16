@@ -6,9 +6,9 @@ import (
 )
 
 type Scheduler interface {
-	ScheduleTarget(ctx context.Context, execCtx ExecutorContext, target *Target) error
-	TargetDone(ctx context.Context, target *Target) error
-	ResetTarget(ctx context.Context, target *Target) error
+	ScheduleTarget(ctx context.Context, params map[string]string, execCtx ExecutorContext, target *Target) error
+	TargetDone(ctx context.Context, target *Target, params map[string]string) error
+	ResetTarget(ctx context.Context, target *Target, params map[string]string) error
 }
 
 type LocalScheduler struct {
@@ -21,8 +21,8 @@ func NewLocalScheduler() *LocalScheduler {
 	}
 }
 
-func (s *LocalScheduler) ScheduleTarget(ctx context.Context, execCtx ExecutorContext, target *Target) error {
-	lock, loaded := s.targets.LoadOrStore(target.FQN(), &sync.Mutex{})
+func (s *LocalScheduler) ScheduleTarget(ctx context.Context, params map[string]string, execCtx ExecutorContext, target *Target) error {
+	lock, loaded := s.targets.LoadOrStore(target.FQNWithParameters(params), &sync.Mutex{})
 	lock.(*sync.Mutex).Lock()
 	defer lock.(*sync.Mutex).Unlock()
 
@@ -30,15 +30,15 @@ func (s *LocalScheduler) ScheduleTarget(ctx context.Context, execCtx ExecutorCon
 		return nil
 	}
 
-	return target.Run(ctx, execCtx)
+	return target.Run(ctx, params, execCtx)
 }
 
-func (s *LocalScheduler) TargetDone(ctx context.Context, target *Target) error {
-	s.targets.Store(target.FQN(), &sync.Mutex{})
+func (s *LocalScheduler) TargetDone(ctx context.Context, target *Target, params map[string]string) error {
+	s.targets.Store(target.FQNWithParameters(params), &sync.Mutex{})
 	return nil
 }
 
-func (s *LocalScheduler) ResetTarget(ctx context.Context, target *Target) error {
-	s.targets.Delete(target.FQN())
+func (s *LocalScheduler) ResetTarget(ctx context.Context, target *Target, params map[string]string) error {
+	s.targets.Delete(target.FQNWithParameters(params))
 	return nil
 }

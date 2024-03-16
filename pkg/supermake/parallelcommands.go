@@ -27,7 +27,7 @@ func (c *ParallelCommands) FQN() string {
 	return ""
 }
 
-func (c *ParallelCommands) Run(ctx context.Context, execCtx ExecutorContext) error {
+func (c *ParallelCommands) Run(ctx context.Context, params map[string]string, execCtx ExecutorContext) error {
 	wg := new(sync.WaitGroup)
 	errChan := make(chan error)
 

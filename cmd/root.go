@@ -53,7 +53,7 @@ var run = &cobra.Command{
 
 		for _, skip := range skipTargets {
 			if target, ok := file.Targets[skip]; ok {
-				err := scheduler.TargetDone(ctx, target)
+				err := scheduler.TargetDone(ctx, target, make(map[string]string))
 				if err != nil {
 					log.Fatal(err)
 				}
@@ -61,7 +61,7 @@ var run = &cobra.Command{
 		}
 
 		for _, target := range file.GetDoneFileTargets() {
-			err := scheduler.TargetDone(ctx, target)
+			err := scheduler.TargetDone(ctx, target, make(map[string]string))
 			if err != nil {
 				log.Fatal(err)
 			}

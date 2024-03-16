@@ -3,14 +3,34 @@ package supermake
 import (
 	"context"
 	"fmt"
+	"regexp"
+	"slices"
 	"strings"
 	"sync"
 )
+
+// Parse a target call, including parameters. e.g.
+// `build_docker(stage=dev)`
+func ParseTargetCall(call string) (string, map[string]string, error) {
+	nameRe := regexp.MustCompile(`([\w-\.]+)\(`)
+	paramRe := regexp.MustCompile(`([\w-\.]+)=([\w-\.]+)`)
+
+	name := nameRe.FindString(call)
+
+	paramMatches := paramRe.FindAllStringSubmatch(call, 50)
+	params := make(map[string]string)
+	for _, match := range paramMatches {
+		params[strings.TrimSpace(match[1])] = strings.TrimSpace(match[2])
+	}
+
+	return name, params, nil
+}
 
 type Targets map[string]*Target
 
 type Target struct {
 	name         string
+	Parameters   []string
 	Node         string
 	Dependencies []string
 	Variables    Variables
@@ -18,9 +38,10 @@ type Target struct {
 	Steps        []Command
 }
 
-func NewTarget(name, node string, dependencies []string, executor CommandExecutor, steps []Command, variables Variables) *Target {
+func NewTarget(name, node string, parameters, dependencies []string, executor CommandExecutor, steps []Command, variables Variables) *Target {
 	return &Target{
 		name:         name,
+		Parameters:   parameters,
 		Dependencies: dependencies,
 		Node:         node,
 		Executor:     executor,
@@ -40,11 +61,17 @@ func (t *Target) runDependencies(ctx context.Context, execCtx ExecutorContext) e
 	defer cancel()
 
 	for _, subTargetName := range t.Dependencies {
-		dependencyTarget, ok := execCtx.Targets[subTargetName]
+		name, parameters, err := ParseTargetCall(subTargetName)
+		if err != nil {
+			return err
+		}
+
+		dependencyTarget, ok := execCtx.Targets[name]
 		if !ok {
 			return fmt.Errorf("unknown dependency target '%s'", subTargetName)
 		}
 
+		// Detect loops
 		for name := range execCtx.ParentTargets {
 			if name == dependencyTarget.Name() {
 				return fmt.Errorf("target dependency loop %s -> %s", t.name, subTargetName)
@@ -54,7 +81,7 @@ func (t *Target) runDependencies(ctx context.Context, execCtx ExecutorContext) e
 		execCtx.Logger.Debug("running dependency target", "dependency", dependencyTarget.FQN())
 		go func() {
 			defer wg.Done()
-			err := execCtx.Scheduler.ScheduleTarget(subTargetCtx, execCtx, dependencyTarget)
+			err := execCtx.Scheduler.ScheduleTarget(subTargetCtx, parameters, execCtx, dependencyTarget)
 			if err != nil {
 				errChan <- err
 			}
@@ -83,9 +110,30 @@ func (t *Target) FQN() string {
 	return t.name
 }
 
-func (t *Target) Run(ctx context.Context, execCtx ExecutorContext) error {
+func (t *Target) FQNWithParameters(parameters map[string]string) string {
+	sortedParameters := make([]string, 0, len(parameters))
+	for key := range parameters {
+		sortedParameters = append(sortedParameters, key)
+	}
+	slices.Sort(sortedParameters)
+
+	paramString := strings.Builder{}
+	for _, key := range sortedParameters {
+		paramString.WriteString(fmt.Sprintf("%s=%s", key, parameters[key]))
+	}
+
+	return fmt.Sprintf("%s(%s)", t.FQN(), paramString.String())
+}
+
+func (t *Target) Run(ctx context.Context, params map[string]string, execCtx ExecutorContext) error {
 	logger := execCtx.Logger.With("target", t.FQN())
 	execCtx.Logger = logger
+
+	for key, val := range params {
+		execCtx.EnvVars[key] = NewVariable(key, RECURSIVE, true, val)
+	}
+
+	logger.Info(strings.Join(execCtx.EnvVars.EnvStrings(), ", "))
 
 	err := t.runDependencies(ctx, execCtx)
 	if err != nil {

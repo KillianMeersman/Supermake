@@ -350,7 +350,7 @@ func (p *SuperMakeFileParser) parseTarget(variables supermake.Variables, targets
 				return nil, err
 			}
 
-			target := supermake.NewTarget(fmt.Sprintf("%s::%s", data.Name, blockName), data.Node, []string{}, executor, []supermake.Command{commands}, variables)
+			target := supermake.NewTarget(fmt.Sprintf("%s::%s", data.Name, blockName), data.Node, data.Parameters, []string{}, executor, []supermake.Command{commands}, variables)
 			target.Dependencies = append(target.Dependencies, data.Dependencies...)
 			targets[target.FQN()] = target
 			data.Dependencies = append(data.Dependencies, target.FQN())
@@ -362,7 +362,7 @@ func (p *SuperMakeFileParser) parseTarget(variables supermake.Variables, targets
 	data.Dependencies = append(data.Dependencies, blockDependencies...)
 	p.i = end
 
-	target := supermake.NewTarget(data.Name, data.Node, data.Dependencies, supermake.NewLocalEnvironment(), []supermake.Command{}, variables)
+	target := supermake.NewTarget(data.Name, data.Node, data.Parameters, data.Dependencies, supermake.NewLocalEnvironment(), []supermake.Command{}, variables)
 	targets[target.FQN()] = target
 
 	return target, nil

@@ -44,7 +44,7 @@ func (s *SupermakeFile) Run(ctx context.Context, scheduler Scheduler, cwd string
 
 		wg.Add(1)
 		go func() {
-			err := scheduler.ScheduleTarget(ctx, execCtx, t)
+			err := scheduler.ScheduleTarget(ctx, make(map[string]string), execCtx, t)
 			if err != nil {
 				errs <- err
 			}

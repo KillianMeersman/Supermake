@@ -33,7 +33,7 @@ type CommandExecutor interface {
 }
 
 type Runable interface {
-	Run(ctx context.Context, execCtx ExecutorContext) error
+	Run(ctx context.Context, params map[string]string, execCtx ExecutorContext) error
 	Name() string
 }
 

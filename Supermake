@@ -3,29 +3,8 @@ export GOCACHE = /tmp/.cache
 .SHELL = sh -ce
 CONTAINER = golang:1.21
 
-dist:
-	mac_x64:
-		@${{ CONTAINER }}
-		echo 'Building mac x64 binary'
-		GOOS=darwin GOARCH=amd64 go build -buildvcs=false -o bin/supermake_mac_x64
-		echo 'Done building mac x64 binary'
+build(os, arch, name):
+	@${{ CONTAINER }}
+		GOOS=${{ os }} GOARCH=${{ arch }} go build -buildvcs=false -o bin/${{ name }}
 
-	mac_arm64:
-		@${{ CONTAINER }}
-		echo 'Building mac ARM64 binary'
-		GOOS=darwin GOARCH=arm64 go build -buildvcs=false -o bin/supermake_mac_arm64
-		echo 'Done building mac ARM64 binary'
-
-	linux:
-		@${{ CONTAINER }}
-		echo 'Building linux binaries'
-		GOOS=linux GOARCH=amd64 go build -buildvcs=false -o bin/supermake_linux_x64
-		GOOS=linux GOARCH=386 go build -buildvcs=false -o bin/supermake_linux_x32
-		echo 'Done building linux binaries'
-
-	windows:
-		@${{ CONTAINER }}
-		echo 'Building windows binaries'
-		GOOS=windows GOARCH=amd64 go build -buildvcs=false -o bin/supermake_windows_x64.exe
-		GOOS=windows GOARCH=386 go build -buildvcs=false -o bin/supermake_windows_x32.exe
-		echo 'Done building windows binaries'
+dist: build(os=darwin, arch=amd64, name=supermake_mac_x64) build(os=darwin, arch=arm64, name=supermake_mac_arm64) build(os=linux, arch=amd64, name=supermake_linux_x64) build(os=linux, arch=386, name=supermake_linux_x32) build(os=windows, arch=amd64, name=supermake_windows_x64) build(os=linux, arch=386, name=supermake_windows_x32)
