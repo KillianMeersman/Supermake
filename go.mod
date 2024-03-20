@@ -3,7 +3,7 @@ module github.com/KillianMeersman/Supermake
 go 1.21
 
 require (
-	github.com/docker/docker v25.0.3+incompatible
+	github.com/docker/docker v25.0.5+incompatible
 	github.com/moby/moby v24.0.9+incompatible
 	github.com/opencontainers/image-spec v1.0.2
 	github.com/spf13/cobra v1.7.0
