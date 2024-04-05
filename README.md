@@ -13,6 +13,10 @@ It offers builtin parallelism and container support, all using the a Makefile-li
 3. Run (part of) your recipes in different shells, interpreters and even containers 🐳.
 5. Make-like syntax. Re-purpose your Makefiles with a few tweaks.
 
+## Roadmap 🗺️
+- Parametrized targets. Like `build_container(stage):`
+- Supermake directory trees. Automatically run matching targets of Supermake files in subdirectories.
+
 ## Installation
 Grab a pre-built executable from the [latest release](https://github.com/KillianMeersman/Supermake/releases/latest/) or build it yourself.
 ```bash
