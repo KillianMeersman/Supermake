@@ -1,9 +1,11 @@
 run: build
 	bin/supermake help
 
-build: test
+vendor:
 	go mod tidy
 	go mod vendor
+
+build: test
 	go generate ./...
 	go build -mod vendor -o bin/supermake
 
