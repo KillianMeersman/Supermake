@@ -3,6 +3,7 @@ run: build
 
 build: test
 	go mod tidy
+	go mod vendor
 	go generate ./...
 	go build -mod vendor -o bin/supermake
 
